@@ -109,16 +109,32 @@ def importance_boost(entry: Memory) -> float:
     return base
 
 
+def build_reverse_link_index(all_entries: List[Memory]) -> Dict[str, set]:
+    """
+    Build an inverted index: memory_id -> set of IDs that link TO it.
+    Avoids O(n) scan per entry during associative scoring.
+    """
+    index: Dict[str, set] = {}
+    for e in all_entries:
+        for lid in e.linked_ids:
+            if lid not in index:
+                index[lid] = set()
+            index[lid].add(e.id)
+    return index
+
+
 def associative_score(
     entry_id: str,
     all_entries: List[Memory],
     top_ids: List[str],
+    reverse_index: Optional[Dict[str, set]] = None,
 ) -> float:
     """
     Graph-based associative boost.
     Always on (was gated by Big Five openness in CogniTrait).
 
     Checks if this entry is linked (via linked_ids) to any top-scoring entry.
+    Uses reverse_index when available to avoid O(n) scan.
     """
     # Find the entry
     entry = None
@@ -130,14 +146,22 @@ def associative_score(
     if entry is None:
         return 0.0
 
+    top_set = set(top_ids)
+
     # Check forward links: entry -> top result
-    linked_to_top = sum(1 for lid in entry.linked_ids if lid in top_ids)
+    linked_to_top = sum(1 for lid in entry.linked_ids if lid in top_set)
 
     if linked_to_top == 0:
         # Check reverse links: top result -> entry
-        for e in all_entries:
-            if e.id in top_ids and entry_id in e.linked_ids:
-                linked_to_top += 1
+        if reverse_index is not None:
+            # O(1) lookup via inverted index
+            reverse_linkers = reverse_index.get(entry_id, set())
+            linked_to_top = len(reverse_linkers & top_set)
+        else:
+            # Fallback: O(n) scan
+            for e in all_entries:
+                if e.id in top_set and entry_id in e.linked_ids:
+                    linked_to_top += 1
 
     if linked_to_top == 0:
         return 0.0
@@ -151,6 +175,7 @@ def compute_score(
     query_words: List[str],
     top_ids: Optional[List[str]] = None,
     all_entries: Optional[List[Memory]] = None,
+    reverse_index: Optional[Dict[str, set]] = None,
     now: Optional[float] = None,
 ) -> Dict[str, float]:
     """
@@ -162,7 +187,10 @@ def compute_score(
 
     assoc = 0.0
     if top_ids and all_entries:
-        assoc = associative_score(entry.id, all_entries, top_ids)
+        assoc = associative_score(
+            entry.id, all_entries, top_ids,
+            reverse_index=reverse_index,
+        )
 
     total = (
         WEIGHTS["keyword"] * kw

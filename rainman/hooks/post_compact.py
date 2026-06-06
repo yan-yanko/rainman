@@ -33,7 +33,8 @@ def main():
     # Read compaction event from stdin
     try:
         hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, Exception):
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"[rainman] post_compact: failed to parse input: {e}", file=sys.stderr)
         hook_input = {}
 
     cwd = hook_input.get("cwd", os.getcwd())

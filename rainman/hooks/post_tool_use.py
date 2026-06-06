@@ -38,7 +38,8 @@ MIN_CONTENT_LENGTH = 50
 def main():
     try:
         hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, Exception):
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"[rainman] post_tool_use: failed to parse input: {e}", file=sys.stderr)
         sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")
@@ -62,6 +63,15 @@ def main():
     from rainman.core.engine import RainmanEngine
 
     engine = RainmanEngine(project_dir=cwd)
+
+    # Dedup: skip if a memory with the same file_refs and source type exists
+    if file_refs:
+        existing = engine.links(file_refs[0])
+        for m in existing:
+            if m.source and m.source.startswith(f"hook:post_tool_use:{tool_name}"):
+                # Already have a memory from the same hook for the same file
+                sys.exit(0)
+
     engine.add(
         content=content,
         category=category,

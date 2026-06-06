@@ -20,6 +20,7 @@ from rainman.core.models import Memory, RecallResult
 from rainman.core.sentiment import classify_sentiment
 from rainman.core.scoring import (
     compute_score,
+    build_reverse_link_index,
     CATEGORY_IMPORTANCE,
     IMPORTANCE_KEYWORDS,
 )
@@ -141,12 +142,14 @@ class RainmanEngine:
         top_ids = [e.id for e, _ in initial[:limit]]
 
         # Phase 2: Re-score with associative boost
+        reverse_index = build_reverse_link_index(entries)
         results = []
         for entry in entries:
             scores = compute_score(
                 entry, query_words,
                 top_ids=top_ids,
                 all_entries=entries,
+                reverse_index=reverse_index,
                 now=now,
             )
 
@@ -174,8 +177,9 @@ class RainmanEngine:
             r.memory.recall_count += 1
             r.memory.last_recalled = now
 
-        # Persist updated access stats
-        self.store.save_all(self._memories)
+        # Persist only the layers that had recalled memories updated
+        updated_layers = {r.memory.layer for r in top_results}
+        self.store.save_layers(self._memories, updated_layers)
 
         return top_results
 
@@ -320,6 +324,8 @@ class RainmanEngine:
             scored.append((m, score))
 
         scored.sort(key=lambda x: x[1])
-        n_remove = len(self._memories) - MAX_MEMORIES + (MAX_MEMORIES // 10)
+        n_remove = max(0, len(self._memories) - MAX_MEMORIES)
+        if n_remove == 0:
+            return
         remove_ids = {m.id for m, _ in scored[:n_remove]}
         self._memories = [m for m in self._memories if m.id not in remove_ids]

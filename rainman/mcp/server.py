@@ -193,6 +193,8 @@ class RainmanMCPServer:
         """Execute a tool and return MCP-formatted result."""
         try:
             if name == "recall":
+                if "query" not in args or not args["query"]:
+                    return self._tool_error("recall requires 'query' argument")
                 results = self.engine.recall(
                     query=args["query"],
                     limit=args.get("limit", 5),
@@ -201,6 +203,8 @@ class RainmanMCPServer:
                 text = self._format_recall(results)
 
             elif name == "remember":
+                if "content" not in args or not args["content"]:
+                    return self._tool_error("remember requires 'content' argument")
                 m = self.engine.add(
                     content=args["content"],
                     category=args.get("category", "note"),
@@ -216,6 +220,8 @@ class RainmanMCPServer:
                 text = self._format_context(results)
 
             elif name == "links":
+                if "ref" not in args or not args["ref"]:
+                    return self._tool_error("links requires 'ref' argument")
                 results = self.engine.links(args["ref"])
                 text = self._format_links(args["ref"], results)
 
@@ -224,18 +230,19 @@ class RainmanMCPServer:
                 text = self._format_stats(stats)
 
             else:
-                return {
-                    "content": [{"type": "text", "text": f"Unknown tool: {name}"}],
-                    "isError": True,
-                }
+                return self._tool_error(f"Unknown tool: {name}")
 
             return {"content": [{"type": "text", "text": text}]}
 
         except Exception as e:
-            return {
-                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
-                "isError": True,
-            }
+            return self._tool_error(str(e))
+
+    def _tool_error(self, message: str) -> Dict:
+        """Return a structured MCP tool error."""
+        return {
+            "content": [{"type": "text", "text": f"Error: {message}"}],
+            "isError": True,
+        }
 
     def _format_recall(self, results) -> str:
         if not results:

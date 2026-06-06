@@ -30,7 +30,8 @@ def main():
     # Read hook input from stdin
     try:
         hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, Exception):
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"[rainman] session_start: failed to parse input: {e}", file=sys.stderr)
         hook_input = {}
 
     cwd = hook_input.get("cwd", os.getcwd())

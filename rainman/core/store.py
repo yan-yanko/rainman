@@ -69,7 +69,7 @@ class MemoryStore:
             self._save_file(project_path, project_memories)
 
     def save_one(self, memory: Memory) -> None:
-        """Append a single memory to the appropriate layer."""
+        """Append or update a single memory in the appropriate layer."""
         if memory.layer == "global":
             path = os.path.join(self._global_dir, "memories.json")
         elif self._project_dir:
@@ -80,8 +80,28 @@ class MemoryStore:
             path = os.path.join(self._global_dir, "memories.json")
 
         existing = self._load_file(path, layer=memory.layer)
-        existing.append(memory)
+        # Update in-place if memory already exists, else append
+        updated = False
+        for i, m in enumerate(existing):
+            if m.id == memory.id:
+                existing[i] = memory
+                updated = True
+                break
+        if not updated:
+            existing.append(memory)
         self._save_file(path, existing)
+
+    def save_layers(self, memories: List[Memory], layers: set) -> None:
+        """Save only the specified layers. Avoids full rewrite on recall."""
+        if "global" in layers:
+            global_memories = [m for m in memories if m.layer == "global"]
+            global_path = os.path.join(self._global_dir, "memories.json")
+            self._save_file(global_path, global_memories)
+
+        if "project" in layers and self._project_dir:
+            project_memories = [m for m in memories if m.layer == "project"]
+            project_path = os.path.join(self._project_dir, "memories.json")
+            self._save_file(project_path, project_memories)
 
     def init_project(self, project_dir: str) -> str:
         """Initialize .rainman/ in a project directory."""
@@ -155,8 +175,18 @@ class MemoryStore:
             return []
 
     def _save_file(self, path: str, memories: List[Memory]) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        parent = os.path.dirname(path)
+        os.makedirs(parent, exist_ok=True)
         tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump([m.to_dict() for m in memories], f, indent=2)
-        os.replace(tmp, path)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump([m.to_dict() for m in memories], f, indent=2)
+            os.replace(tmp, path)
+        except OSError:
+            # If atomic replace fails, try direct write as fallback
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump([m.to_dict() for m in memories], f, indent=2)
