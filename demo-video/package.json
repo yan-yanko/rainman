@@ -1,0 +1,22 @@
+{
+  "name": "rainman-demo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render RainmanDemo out/rainman-demo.mp4",
+    "build": "remotion render RainmanDemo out/rainman-demo.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.473",
+    "@remotion/google-fonts": "4.0.473",
+    "@remotion/transitions": "4.0.473",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.473"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
