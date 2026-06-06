@@ -657,6 +657,48 @@ nav .links a:hover { color: var(--text-primary); }
 }
 
 /* ═══════════════════════════════════════════════════════
+   PLATFORM SUPPORT
+   ═══════════════════════════════════════════════════════ */
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.platform-card {
+  padding: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.platform-card .platform-name {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+.platform-card .platform-status {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.platform-card .platform-status.live {
+  color: var(--accent);
+}
+.platform-note {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════════════
    CTA / FOOTER
    ═══════════════════════════════════════════════════════ */
 #cta {
@@ -768,7 +810,7 @@ footer a:hover { color: var(--text-primary); }
       <div class="hero-text reveal">
         <h1>Your AI forgot<br>what you <span class="accent">already built.</span></h1>
         <p class="subtitle">
-          Rainman is a persistent memory layer for AI coding tools. It remembers your codebase — patterns, failures, solutions, decisions — and surfaces them exactly when needed.
+          Rainman is a persistent memory layer for AI coding tools. Set up once, remember forever. It learns your codebase &mdash; patterns, failures, solutions, decisions &mdash; and surfaces them exactly when needed. Across every session.
         </p>
         <div class="hero-badges">
           <span class="badge"><span class="dot"></span> Zero LLM calls</span>
@@ -1040,9 +1082,48 @@ rainman add "JWT expires in 30d" -c pattern</code>
       </div>
     </div>
     <div class="doctor-callout reveal">
-      <h3>Then just code.</h3>
-      <p>Rainman runs silently in the background. Memories accumulate automatically from your Claude Code sessions. When you need something, Claude finds it through MCP &mdash; or run <code>rainman recall "your query"</code> yourself.</p>
+      <h3>Set up once. Remember forever.</h3>
+      <p>No re-activation between sessions. No manual input. Rainman's hooks fire automatically every time a session starts, every time context compacts, every time a tool runs. Memories persist on disk and grow with every session. <code>rainman recall "your query"</code></p>
     </div>
+  </div>
+</section>
+
+<!-- PLATFORM SUPPORT -->
+<section id="platforms">
+  <div class="container">
+    <div class="reveal">
+      <div class="story-label">Platform Support</div>
+      <h2 class="story-heading">Works with your editor.</h2>
+    </div>
+    <div class="platform-grid">
+      <div class="platform-card reveal delay-1">
+        <div class="platform-name">Claude Code</div>
+        <div class="platform-status live">Full integration &mdash; hooks + MCP</div>
+      </div>
+      <div class="platform-card reveal delay-2">
+        <div class="platform-name">Cursor</div>
+        <div class="platform-status">MCP server + rules file</div>
+      </div>
+      <div class="platform-card reveal delay-2">
+        <div class="platform-name">Windsurf</div>
+        <div class="platform-status">MCP server</div>
+      </div>
+      <div class="platform-card reveal delay-3">
+        <div class="platform-name">Continue.dev</div>
+        <div class="platform-status">MCP server</div>
+      </div>
+      <div class="platform-card reveal delay-3">
+        <div class="platform-name">Copilot</div>
+        <div class="platform-status">MCP server</div>
+      </div>
+      <div class="platform-card reveal delay-3">
+        <div class="platform-name">Any MCP Client</div>
+        <div class="platform-status">JSON-RPC 2.0 stdio</div>
+      </div>
+    </div>
+    <p class="platform-note">
+      The core engine and MCP server work with any MCP-compatible client. Claude Code gets the deepest integration with automatic hooks for session start, context compaction, and tool usage. CLI works standalone everywhere.
+    </p>
   </div>
 </section>
 
