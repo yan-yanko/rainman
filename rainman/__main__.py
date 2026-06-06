@@ -65,6 +65,12 @@ def main():
     p_ingest.add_argument("--limit", "-n", type=int, default=50, help="Max git commits (default: 50)")
     p_ingest.add_argument("--depth", type=int, default=4, help="Max directory depth for files (default: 4)")
 
+    # setup
+    sub.add_parser("setup", help="One-command setup: init + MCP + hooks")
+
+    # doctor
+    sub.add_parser("doctor", help="Self-test: verify engine, storage, and integrations")
+
     # serve
     sub.add_parser("serve", help="Start MCP stdio server")
 
@@ -78,6 +84,7 @@ def main():
     from rainman.cli.commands import (
         cmd_init, cmd_add, cmd_recall, cmd_status,
         cmd_links, cmd_export, cmd_context, cmd_ingest,
+        cmd_setup, cmd_doctor,
     )
 
     if args.command == "init":
@@ -102,6 +109,10 @@ def main():
         cmd_export()
     elif args.command == "ingest":
         cmd_ingest(git=args.git, files=args.files, limit=args.limit, depth=args.depth)
+    elif args.command == "setup":
+        cmd_setup()
+    elif args.command == "doctor":
+        cmd_doctor()
     elif args.command == "serve":
         from rainman.mcp.server import run_server
         run_server()
