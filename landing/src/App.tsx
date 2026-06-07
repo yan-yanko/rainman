@@ -107,10 +107,10 @@ export default function App() {
         {/* Right: buttons */}
         <div className="flex items-center gap-3">
           <a
-            href="https://pypi.org/project/rainman-memory/"
+            href="https://github.com/yan-yanko/rainman#quick-start"
             className="hidden sm:block text-sm text-white/60 hover:text-white/90 border border-white/10 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors"
           >
-            PyPI
+            Install
           </a>
           <a
             href="https://github.com/yan-yanko/rainman"
@@ -583,7 +583,7 @@ export default function App() {
                     3.10+.
                   </p>
                   <div className="bg-black/40 rounded-lg p-4 font-mono text-sm text-white/70">
-                    $ pip install rainman-memory
+                    $ pip install git+https://github.com/yan-yanko/rainman.git
                   </div>
                 </div>
               </div>
@@ -736,7 +736,7 @@ export default function App() {
           </FadeDown>
           <FadeDown delay={0.1}>
             <div className="inline-block bg-black/40 rounded-lg px-6 py-3 font-mono text-sm text-white/70 mb-8">
-              pip install rainman-memory && rainman setup
+              pip install git+https://github.com/yan-yanko/rainman.git && rainman setup
             </div>
           </FadeDown>
           <FadeDown delay={0.2}>

@@ -30,8 +30,8 @@ The module that was "unfindable" now surfaces as the #1 result in every relevant
 ## Quick Start
 
 ```bash
-# Install
-pip install -e .
+# Install from GitHub (no PyPI needed)
+pip install git+https://github.com/yan-yanko/rainman.git
 
 # Initialize in your project
 cd /your/project
