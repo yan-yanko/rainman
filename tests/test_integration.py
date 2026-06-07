@@ -29,21 +29,21 @@ def _fresh_engine(project, global_dir):
 
 @pytest.mark.unit
 class TestRoundTrip:
-    """Full add → persist → reload → recall cycle with real disk."""
+    """Full add -> persist -> reload -> recall cycle with real disk."""
 
     def test_add_recall_across_restart(self, dirs):
         project, global_dir = dirs
         e1 = _fresh_engine(project, global_dir)
-        e1.add("political_identity.py assigns party ID using ANES data",
-               category="pattern", tags=["election"])
+        e1.add("auth.py handles JWT token refresh logic",
+               category="pattern", tags=["api"])
 
         # New engine instance — must load from disk
         e2 = _fresh_engine(project, global_dir)
-        results = e2.recall("party ID assignment")
+        results = e2.recall("JWT token refresh")
         assert len(results) >= 1
-        assert "political_identity" in results[0].memory.content
+        assert "auth" in results[0].memory.content
         assert results[0].memory.category == "pattern"
-        assert "election" in results[0].memory.tags
+        assert "api" in results[0].memory.tags
 
     def test_multiple_adds_persist(self, dirs):
         project, global_dir = dirs
@@ -131,8 +131,8 @@ class TestAutoLinking:
     def test_related_memories_get_linked(self, dirs):
         project, global_dir = dirs
         e = _fresh_engine(project, global_dir)
-        m1 = e.add("election predictor assigns party ID using ANES survey data")
-        m2 = e.add("election predictor has anti-incumbent voting bias in party assignment")
+        m1 = e.add("payment service handles token validation using Redis cache")
+        m2 = e.add("payment service has race condition in token validation logic")
         # m2 should be auto-linked to m1 due to keyword overlap
         assert len(m2.linked_ids) > 0
 
@@ -161,12 +161,12 @@ class TestAutoLinking:
         """Linked memories should get associative boost in phase 2."""
         project, global_dir = dirs
         e = _fresh_engine(project, global_dir)
-        m1 = e.add("election voting bias is a critical problem", category="failure")
-        m2 = e.add("political identity module solves voting bias", category="solution")
+        m1 = e.add("rate-limit bug is a critical problem in the API", category="failure")
+        m2 = e.add("auth module solves rate-limit bug with token bucket", category="solution")
         # Manually link them
         e.link(m1.id, m2.id)
 
-        results = e.recall("election voting bias")
+        results = e.recall("rate-limit bug API")
         # Both should appear — m2 gets associative boost from being linked to m1
         ids_returned = [r.memory.id for r in results]
         assert m1.id in ids_returned
@@ -227,7 +227,7 @@ class TestDiskFormat:
         project, global_dir = dirs
         e = _fresh_engine(project, global_dir)
         e.add("test memory content", category="pattern", tags=["auth", "jwt"],
-              file_refs=["engine/auth.py"])
+              file_refs=["services/auth.py"])
 
         path = os.path.join(project, ".rainman", "memories.json")
         with open(path, encoding="utf-8") as f:
@@ -238,7 +238,7 @@ class TestDiskFormat:
         assert entry["content"] == "test memory content"
         assert entry["category"] == "pattern"
         assert entry["tags"] == ["auth", "jwt"]
-        assert entry["file_refs"] == ["engine/auth.py"]
+        assert entry["file_refs"] == ["services/auth.py"]
         assert entry["layer"] == "project"
         assert "id" in entry
         assert "timestamp" in entry

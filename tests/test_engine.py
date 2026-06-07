@@ -24,36 +24,36 @@ def engine(tmp_path):
 class TestAdd:
 
     def test_add_returns_memory(self, engine):
-        m = engine.add("political_identity.py assigns party ID using ANES data")
+        m = engine.add("auth.py handles JWT token refresh logic")
         assert m.id.startswith("rm_")
-        assert "political_identity" in m.content
+        assert "auth" in m.content
         assert m.category == "note"
 
     def test_add_with_category(self, engine):
-        m = engine.add("Use ANES data for party assignment", category="pattern")
+        m = engine.add("Use Redis cache for session tokens", category="pattern")
         assert m.category == "pattern"
 
     def test_add_auto_sentiment(self, engine):
-        m = engine.add("Critical bug: the election predictor crashes on empty input")
+        m = engine.add("Critical bug: the payment service crashes on empty input")
         # Should detect negative/anxious sentiment
         assert m.sentiment != "neutral"
 
     def test_add_with_tags(self, engine):
-        m = engine.add("test content", tags=["election", "bias"])
-        assert "election" in m.tags
+        m = engine.add("test content", tags=["api", "auth"])
+        assert "api" in m.tags
 
     def test_add_with_file_refs(self, engine):
-        m = engine.add("assigns party ID", file_refs=["engine/election/predictor.py"])
-        assert "engine/election/predictor.py" in m.file_refs
+        m = engine.add("handles JWT tokens", file_refs=["services/api/auth.py"])
+        assert "services/api/auth.py" in m.file_refs
 
     def test_add_auto_links(self, engine):
-        engine.add("political identity assignment using ANES survey data")
-        m2 = engine.add("political identity module assigns party ID from survey")
+        engine.add("user authentication flow using session tokens")
+        m2 = engine.add("user authentication module validates session tokens")
         # Should auto-link due to keyword overlap
         assert len(m2.linked_ids) > 0
 
     def test_add_to_global(self, engine):
-        m = engine.add("Claude has RLHF bias on political content", layer="global")
+        m = engine.add("timeout errors on slow connections", layer="global")
         assert m.layer == "global"
 
 
@@ -61,13 +61,13 @@ class TestAdd:
 class TestRecall:
 
     def test_recall_by_keyword(self, engine):
-        engine.add("political_identity.py assigns party ID without LLM", category="pattern")
+        engine.add("auth.py handles JWT token refresh logic", category="pattern")
         engine.add("database migration script for users table", category="note")
         engine.add("CSS fix for dark mode toggle", category="solution")
 
-        results = engine.recall("party ID assignment")
+        results = engine.recall("JWT token refresh")
         assert len(results) > 0
-        assert "political_identity" in results[0].memory.content
+        assert "auth" in results[0].memory.content
 
     def test_recall_empty_store(self, engine):
         results = engine.recall("anything")
@@ -94,16 +94,16 @@ class TestRecall:
         assert results2[0].memory.recall_count == 2
 
     def test_project_boost(self, engine):
-        engine.add("global knowledge about LLM bias", layer="global")
-        engine.add("project-specific LLM bias in predictor", layer="project")
+        engine.add("caching strategies for web applications", layer="global")
+        engine.add("caching strategies for web applications", layer="project")
 
-        results = engine.recall("LLM bias")
+        results = engine.recall("caching strategies")
         # Project memory should rank higher due to 1.2x boost
         assert results[0].memory.layer == "project"
 
     def test_recall_score_breakdown(self, engine):
-        engine.add("election voting bias solution")
-        results = engine.recall("election voting")
+        engine.add("rate-limit bug fix for api")
+        results = engine.recall("rate-limit api")
         r = results[0]
         assert r.keyword_score >= 0.0
         assert r.recency_score >= 0.0
@@ -131,18 +131,18 @@ class TestContext:
 class TestLinks:
 
     def test_links_by_file_ref(self, engine):
-        engine.add("assigns party ID", file_refs=["engine/election/predictor.py"])
-        results = engine.links("predictor.py")
+        engine.add("handles JWT tokens", file_refs=["services/api/auth.py"])
+        results = engine.links("auth.py")
         assert len(results) == 1
 
     def test_links_by_content(self, engine):
-        engine.add("The predictor module has a voting bias")
-        results = engine.links("predictor")
+        engine.add("The API gateway has a rate-limit bug")
+        results = engine.links("gateway")
         assert len(results) == 1
 
     def test_links_by_tag(self, engine):
-        engine.add("some content", tags=["election"])
-        results = engine.links("election")
+        engine.add("some content", tags=["api"])
+        results = engine.links("api")
         assert len(results) == 1
 
     def test_manual_link(self, engine):

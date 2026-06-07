@@ -71,15 +71,15 @@ class TestPostToolUse:
         hook_input = {
             "tool_name": "Read",
             "cwd": project,
-            "tool_input": {"file_path": "engine/election/predictor.py"},
-            "tool_output": "class ElectionPredictor:\n    def predict(self, country):\n        # Uses ANES data for party assignment\n        pass\n" * 5,
+            "tool_input": {"file_path": "services/api/auth.py"},
+            "tool_output": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        # Uses Redis cache for session tokens\n        pass\n" * 5,
         }
         result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
         assert result.returncode == 0
 
         memories = _load_memories(project)
         assert len(memories) == 1
-        assert "predictor.py" in memories[0]["content"]
+        assert "auth.py" in memories[0]["content"]
 
     def test_edit_creates_memory(self, project_dir):
         project, global_dir = project_dir
@@ -87,7 +87,7 @@ class TestPostToolUse:
             "tool_name": "Edit",
             "cwd": project,
             "tool_input": {
-                "file_path": "engine/auth.py",
+                "file_path": "services/auth.py",
                 "old_string": "def login(user):",
                 "new_string": "def login(user, remember=False):",
             },
@@ -165,8 +165,8 @@ class TestPostToolUse:
         hook_input = {
             "tool_name": "Read",
             "cwd": project,
-            "tool_input": {"file_path": "engine/election/predictor.py"},
-            "tool_output": "class ElectionPredictor:\n    def predict(self):\n        pass\n" * 5,
+            "tool_input": {"file_path": "services/api/auth.py"},
+            "tool_output": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        pass\n" * 5,
         }
         # First call
         _run_hook("rainman.hooks.post_tool_use", hook_input, project)
@@ -192,7 +192,7 @@ class TestSessionStart:
         hook_input = {"cwd": project}
         result = _run_hook("rainman.hooks.session_start", hook_input, project)
         assert result.returncode == 0
-        # No memories → no stdout output (silent exit)
+        # No memories -> no stdout output (silent exit)
         assert result.stdout.strip() == ""
 
     def test_with_memories_outputs_context(self, project_dir):
@@ -201,7 +201,7 @@ class TestSessionStart:
         import time
         memories = [{
             "id": "rm_test_001",
-            "content": "political_identity.py assigns party ID",
+            "content": "auth.py handles JWT token refresh",
             "timestamp": time.time(),
             "importance": 0.8,
             "category": "pattern",
@@ -209,9 +209,9 @@ class TestSessionStart:
             "linked_ids": [],
             "recall_count": 0,
             "last_recalled": None,
-            "tags": ["election"],
+            "tags": ["api"],
             "source": "cli",
-            "file_refs": ["engine/election/political_identity.py"],
+            "file_refs": ["services/api/auth.py"],
             "layer": "project",
             "metadata": {},
         }]
@@ -223,7 +223,7 @@ class TestSessionStart:
         result = _run_hook("rainman.hooks.session_start", hook_input, project)
         assert result.returncode == 0
         assert "[Rainman]" in result.stdout
-        assert "political_identity" in result.stdout
+        assert "auth" in result.stdout
 
     def test_malformed_json_exits_cleanly(self, project_dir):
         project, global_dir = project_dir
@@ -241,7 +241,7 @@ class TestPostCompact:
         import time
         memories = [{
             "id": "rm_test_002",
-            "content": "election predictor has anti-incumbent voting bias",
+            "content": "payment service has race condition in rate limiter",
             "timestamp": time.time(),
             "importance": 0.9,
             "category": "failure",
@@ -249,7 +249,7 @@ class TestPostCompact:
             "linked_ids": [],
             "recall_count": 2,
             "last_recalled": time.time(),
-            "tags": ["election", "bias"],
+            "tags": ["api", "bug"],
             "source": "cli",
             "file_refs": [],
             "layer": "project",
@@ -261,12 +261,12 @@ class TestPostCompact:
 
         hook_input = {
             "cwd": project,
-            "summary": "Working on election predictor voting bias",
+            "summary": "Working on payment service rate-limit bug",
         }
         result = _run_hook("rainman.hooks.post_compact", hook_input, project)
         assert result.returncode == 0
         assert "[Rainman]" in result.stdout
-        assert "election" in result.stdout.lower() or "bias" in result.stdout.lower()
+        assert "rate" in result.stdout.lower() or "payment" in result.stdout.lower()
 
     def test_malformed_json_exits_cleanly(self, project_dir):
         project, global_dir = project_dir

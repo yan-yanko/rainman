@@ -29,25 +29,25 @@ def _make_memory(content="test content", category="note", **kwargs):
 class TestKeywordScore:
 
     def test_exact_match(self):
-        m = _make_memory("political identity assignment module")
-        score = keyword_score(m, ["political", "identity"])
+        m = _make_memory("user authentication flow module")
+        score = keyword_score(m, ["user", "authentication"])
         assert score > 0.0
 
     def test_no_match(self):
         m = _make_memory("database migration script")
-        score = keyword_score(m, ["election", "voting"])
+        score = keyword_score(m, ["caching", "redis"])
         assert score == 0.0
 
     def test_partial_match(self):
-        m = _make_memory("election voting bias in predictor")
-        score = keyword_score(m, ["election", "database"])
+        m = _make_memory("rate-limit bug in api gateway")
+        score = keyword_score(m, ["rate-limit", "database"])
         assert 0.0 < score < 1.0
 
     def test_rehearsal_boost(self):
-        m1 = _make_memory("voting module", recall_count=0)
-        m2 = _make_memory("voting module", recall_count=10)
-        s1 = keyword_score(m1, ["voting"])
-        s2 = keyword_score(m2, ["voting"])
+        m1 = _make_memory("auth module", recall_count=0)
+        m2 = _make_memory("auth module", recall_count=10)
+        s1 = keyword_score(m1, ["auth"])
+        s2 = keyword_score(m2, ["auth"])
         assert s2 > s1
 
     def test_empty_query(self):
@@ -55,13 +55,13 @@ class TestKeywordScore:
         assert keyword_score(m, []) == 0.0
 
     def test_tag_match(self):
-        m = _make_memory("some content", tags=["election", "bias"])
-        score = keyword_score(m, ["election"])
+        m = _make_memory("some content", tags=["api", "auth"])
+        score = keyword_score(m, ["api"])
         assert score > 0.0
 
     def test_file_ref_match(self):
-        m = _make_memory("assigns party ID", file_refs=["engine/election/predictor.py"])
-        score = keyword_score(m, ["predictor"])
+        m = _make_memory("handles JWT tokens", file_refs=["services/api/auth.py"])
+        score = keyword_score(m, ["auth"])
         assert score > 0.0
 
 
@@ -118,20 +118,20 @@ class TestImportanceBoost:
 class TestAssociativeScore:
 
     def test_linked_to_top_result(self):
-        m1 = _make_memory("voting bias", id="m1")
-        m2 = _make_memory("party assignment", id="m2", linked_ids=["m1"])
+        m1 = _make_memory("rate-limit bug", id="m1")
+        m2 = _make_memory("token validation", id="m2", linked_ids=["m1"])
         score = associative_score("m2", [m1, m2], top_ids=["m1"])
         assert score > 0.0
 
     def test_no_links(self):
-        m1 = _make_memory("voting bias", id="m1")
+        m1 = _make_memory("rate-limit bug", id="m1")
         m2 = _make_memory("database schema", id="m2")
         score = associative_score("m2", [m1, m2], top_ids=["m1"])
         assert score == 0.0
 
     def test_reverse_link(self):
-        m1 = _make_memory("voting bias", id="m1", linked_ids=["m2"])
-        m2 = _make_memory("party assignment", id="m2")
+        m1 = _make_memory("rate-limit bug", id="m1", linked_ids=["m2"])
+        m2 = _make_memory("token validation", id="m2")
         score = associative_score("m2", [m1, m2], top_ids=["m1"])
         assert score > 0.0
 
@@ -148,8 +148,8 @@ class TestAssociativeScore:
 class TestComputeScore:
 
     def test_returns_all_components(self):
-        m = _make_memory("election voting bias")
-        result = compute_score(m, ["election", "voting"])
+        m = _make_memory("rate-limit bug in api")
+        result = compute_score(m, ["rate-limit", "api"])
         assert "total" in result
         assert "keyword" in result
         assert "recency" in result
@@ -157,8 +157,8 @@ class TestComputeScore:
         assert "associative" in result
 
     def test_total_is_weighted_sum(self):
-        m = _make_memory("election voting bias")
-        result = compute_score(m, ["election", "voting"])
+        m = _make_memory("rate-limit bug in api")
+        result = compute_score(m, ["rate-limit", "api"])
         expected = (
             WEIGHTS["keyword"] * result["keyword"]
             + WEIGHTS["recency"] * result["recency"]
@@ -168,7 +168,7 @@ class TestComputeScore:
         assert abs(result["total"] - expected) < 0.001
 
     def test_relevant_query_scores_higher(self):
-        m = _make_memory("election voting bias in the predictor module")
-        relevant = compute_score(m, ["election", "voting", "bias"])
+        m = _make_memory("rate-limit bug in the api gateway module")
+        relevant = compute_score(m, ["rate-limit", "api", "bug"])
         irrelevant = compute_score(m, ["database", "migration", "schema"])
         assert relevant["total"] > irrelevant["total"]

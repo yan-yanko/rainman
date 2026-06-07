@@ -31,7 +31,7 @@ def _run_cli(args, cwd, timeout=30):
 
 @pytest.mark.unit
 class TestCLISmoke:
-    """End-to-end CLI: init → add → recall → status → links → export."""
+    """End-to-end CLI: init -> add -> recall -> status -> links -> export."""
 
     def test_init(self, tmp_path):
         cwd = str(tmp_path)
@@ -44,8 +44,8 @@ class TestCLISmoke:
     def test_add(self, tmp_path):
         cwd = str(tmp_path)
         _run_cli(["init"], cwd)
-        result = _run_cli(["add", "political_identity.py assigns party ID",
-                           "--category", "pattern", "--tag", "election"], cwd)
+        result = _run_cli(["add", "auth.py handles JWT token refresh",
+                           "--category", "pattern", "--tag", "api"], cwd)
         assert result.returncode == 0
         assert "Added" in result.stdout
         assert "pattern" in result.stdout
@@ -53,11 +53,11 @@ class TestCLISmoke:
     def test_recall(self, tmp_path):
         cwd = str(tmp_path)
         _run_cli(["init"], cwd)
-        _run_cli(["add", "political_identity.py assigns party ID using ANES data",
+        _run_cli(["add", "auth.py handles JWT token refresh logic",
                    "--category", "pattern"], cwd)
-        result = _run_cli(["recall", "party ID assignment"], cwd)
+        result = _run_cli(["recall", "JWT token refresh"], cwd)
         assert result.returncode == 0
-        assert "political_identity" in result.stdout
+        assert "auth" in result.stdout
 
     def test_recall_empty(self, tmp_path):
         cwd = str(tmp_path)
@@ -82,7 +82,7 @@ class TestCLISmoke:
         cwd = str(tmp_path)
         _run_cli(["init"], cwd)
         _run_cli(["add", "auth module handles JWT tokens",
-                   "--file", "engine/auth.py"], cwd)
+                   "--file", "services/auth.py"], cwd)
         result = _run_cli(["links", "auth.py"], cwd)
         assert result.returncode == 0
         assert "auth" in result.stdout.lower()
@@ -107,7 +107,7 @@ class TestCLISmoke:
         assert "context memory" in result.stdout
 
     def test_full_flow(self, tmp_path):
-        """Full workflow: init → add multiple → recall → status."""
+        """Full workflow: init -> add multiple -> recall -> status."""
         cwd = str(tmp_path)
 
         # Init
@@ -115,24 +115,24 @@ class TestCLISmoke:
         assert r.returncode == 0
 
         # Add several memories
-        _run_cli(["add", "election predictor has anti-incumbent voting bias",
-                   "--category", "failure", "--tag", "election"], cwd)
-        _run_cli(["add", "political_identity.py assigns party ID using ANES data",
-                   "--category", "pattern", "--tag", "election",
-                   "--file", "engine/election/political_identity.py"], cwd)
+        _run_cli(["add", "payment service has race condition in rate limiter",
+                   "--category", "failure", "--tag", "api"], cwd)
+        _run_cli(["add", "auth.py handles JWT token refresh logic",
+                   "--category", "pattern", "--tag", "api",
+                   "--file", "services/api/auth.py"], cwd)
         _run_cli(["add", "CSS fix for dark mode sidebar", "--category", "solution"], cwd)
 
-        # Recall — should find election memories
-        r = _run_cli(["recall", "election voting bias"], cwd)
+        # Recall — should find API memories
+        r = _run_cli(["recall", "rate-limit bug"], cwd)
         assert r.returncode == 0
-        assert "election" in r.stdout.lower()
-        assert "political_identity" in r.stdout or "voting bias" in r.stdout
+        assert "rate" in r.stdout.lower()
+        assert "auth" in r.stdout or "race condition" in r.stdout
 
         # Status — should show 3 memories
         r = _run_cli(["status"], cwd)
         assert "Total memories: 3" in r.stdout
 
-        # Links — should find political_identity.py
-        r = _run_cli(["links", "political_identity.py"], cwd)
+        # Links — should find auth.py
+        r = _run_cli(["links", "auth.py"], cwd)
         assert r.returncode == 0
-        assert "party ID" in r.stdout or "political_identity" in r.stdout
+        assert "JWT" in r.stdout or "auth" in r.stdout

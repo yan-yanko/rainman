@@ -137,9 +137,9 @@ class TestHappyPath:
         resp = _call(server, "tools/call", {
             "name": "remember",
             "arguments": {
-                "content": "political_identity.py assigns party ID without LLM",
+                "content": "auth.py handles JWT token refresh logic",
                 "category": "pattern",
-                "tags": ["election"],
+                "tags": ["api"],
             },
         })
         result = resp["result"]
@@ -149,10 +149,10 @@ class TestHappyPath:
         # Recall
         resp = _call(server, "tools/call", {
             "name": "recall",
-            "arguments": {"query": "party ID assignment"},
+            "arguments": {"query": "JWT token refresh"},
         })
         text = resp["result"]["content"][0]["text"]
-        assert "political_identity" in text
+        assert "auth" in text
         assert "pattern" in text
 
     def test_context_empty_store(self, server):
@@ -180,7 +180,7 @@ class TestHappyPath:
             "name": "remember",
             "arguments": {
                 "content": "auth module handles JWT",
-                "file_refs": ["engine/auth.py"],
+                "file_refs": ["services/auth.py"],
             },
         })
         resp = _call(server, "tools/call", {
