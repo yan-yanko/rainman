@@ -1,5 +1,7 @@
 # Rainman
 
+[![CI](https://github.com/yan-yanko/rainman/actions/workflows/ci.yml/badge.svg)](https://github.com/yan-yanko/rainman/actions/workflows/ci.yml)
+
 Context-aware project memory for AI coding tools. Remembers what you've built, what failed, what works — and surfaces it when your AI assistant needs it.
 
 **Zero LLM. Zero tokens. Zero external dependencies. Runs locally.**
