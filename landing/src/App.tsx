@@ -159,10 +159,12 @@ export default function App() {
 
           {/* Subheading */}
           <FadeDown delay={0.5}>
-            <p className="text-center text-white/40 max-w-2xl mb-5 md:mb-6 text-sm md:text-base lg:text-lg px-4 leading-relaxed">
-              Persistent memory for AI coding tools. Patterns, failures,
-              solutions, decisions — remembered across every session. Zero LLM.
-              Zero tokens. Zero dependencies.
+            <p className="text-center text-white max-w-2xl mb-3 md:mb-4 text-sm md:text-base lg:text-lg px-4 leading-relaxed">
+              Rainman is a persistent memory for AI coding tools. Patterns, failures,
+              solutions, decisions — remembered across every session.
+            </p>
+            <p className="text-center text-white text-sm md:text-base lg:text-lg mb-5 md:mb-6">
+              &#x2022; Zero LLM &nbsp; &#x2022; Zero tokens &nbsp; &#x2022; Zero dependencies
             </p>
           </FadeDown>
 
