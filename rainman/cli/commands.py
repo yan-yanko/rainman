@@ -252,18 +252,25 @@ def cmd_setup() -> None:
     settings_path = os.path.join(claude_dir, "settings.json")
 
     hooks_config = {
+        "SessionStart": [{
+            "matcher": "",
+            "hooks": [{
+                "type": "command",
+                "command": f"{python_path} -m rainman.hooks.session_start",
+            }],
+        }],
+        "PostCompact": [{
+            "matcher": "auto",
+            "hooks": [{
+                "type": "command",
+                "command": f"{python_path} -m rainman.hooks.post_compact",
+            }],
+        }],
         "PostToolUse": [{
             "matcher": "",
             "hooks": [{
                 "type": "command",
                 "command": f"{python_path} -m rainman.hooks.post_tool_use",
-            }],
-        }],
-        "SubagentTurnEnd": [{
-            "matcher": "auto",
-            "hooks": [{
-                "type": "command",
-                "command": f"{python_path} -m rainman.hooks.post_compact",
             }],
         }],
     }
