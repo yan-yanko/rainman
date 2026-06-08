@@ -18,6 +18,7 @@ import {
   Monitor,
   Code,
   ChevronRight,
+  HelpCircle,
 } from 'lucide-react';
 import { StaggeredFade } from './components/StaggeredFade';
 import { FadeDown } from './components/FadeDown';
@@ -101,6 +102,12 @@ export default function App() {
             className="text-sm text-white/50 hover:text-white/90 transition-colors"
           >
             Platforms
+          </a>
+          <a
+            href="#faq"
+            className="text-sm text-white/50 hover:text-white/90 transition-colors"
+          >
+            FAQ
           </a>
         </div>
 
@@ -298,6 +305,43 @@ export default function App() {
         </div>
       </section>
 
+      {/* Not Just Grep explainer */}
+      <section className="py-16 md:py-20 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FadeDown>
+              <div className="liquid-glass rounded-xl p-6 h-full border border-white/10">
+                <h3 className="text-[#e8e8ed] font-medium text-lg mb-3">
+                  grep searches files. Rainman stores knowledge.
+                </h3>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  grep finds text that exists in your codebase. Rainman stores
+                  knowledge <em className="text-white/60">about</em> your
+                  codebase — what failed, what worked, why decisions were made.
+                  That knowledge doesn't live in any file. It lives in git
+                  history, in debugging sessions, in your head. Rainman captures
+                  it and surfaces it when relevant.
+                </p>
+              </div>
+            </FadeDown>
+            <FadeDown delay={0.1}>
+              <div className="liquid-glass rounded-xl p-6 h-full border border-white/10">
+                <h3 className="text-[#e8e8ed] font-medium text-lg mb-3">
+                  grep waits for you. Rainman fires automatically.
+                </h3>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  You have to know what to search for with grep. Rainman
+                  activates via hooks — when a session starts, when context
+                  compacts, when tools run. The AI doesn't need to "remember" to
+                  search. Knowledge surfaces at the moment it's needed, scored
+                  by relevance, recency, and importance.
+                </p>
+              </div>
+            </FadeDown>
+          </div>
+        </div>
+      </section>
+
       {/* Section 2: Validation */}
       <section id="validation" className="py-20 md:py-28 relative z-10">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
@@ -417,7 +461,7 @@ export default function App() {
               {
                 icon: Link,
                 title: 'Associative',
-                body: 'Memories auto-link by keyword overlap. Recalling one boosts its neighbors. Two-phase retrieval surfaces the graph.',
+                body: 'New memories auto-link to existing ones when keyword overlap exceeds 25%. Phase 1 finds top results by keyword/recency/importance. Phase 2 boosts memories linked to those top results. No embeddings, no vectors — developers use consistent terminology, so keyword overlap works.',
                 weight: '0.20',
               },
             ].map((card, i) => (
@@ -728,7 +772,74 @@ export default function App() {
         </div>
       </section>
 
-      {/* Section 7: CTA + Footer */}
+      {/* Section 7: FAQ */}
+      <section id="faq" className="py-20 md:py-28 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <FadeDown>
+            <div className="flex items-center gap-2 mb-4">
+              <HelpCircle className="w-4 h-4 text-accent" />
+              <p className="text-xs uppercase tracking-wider text-accent">
+                FAQ
+              </p>
+            </div>
+          </FadeDown>
+          <FadeDown delay={0.1}>
+            <h2 className="text-3xl md:text-4xl font-semibold text-[#e8e8ed] mb-12">
+              Questions from real developers.
+            </h2>
+          </FadeDown>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                q: 'How is this different from grep?',
+                a: "grep searches text in files. Rainman stores knowledge about code — failures, solutions, decisions — that doesn't exist in any file. Plus it fires automatically via hooks, so the AI doesn't need to know what to search for.",
+              },
+              {
+                q: "Doesn't it burn tokens?",
+                a: "Zero. No LLM at any stage — not on store, not on recall, not on scoring. It's pure Python math. The AI reads the results the same way it reads any text, but Rainman itself consumes zero tokens.",
+              },
+              {
+                q: 'How does associative linking work without embeddings?',
+                a: 'New memories auto-link to existing ones when keyword overlap exceeds 25%. On recall, phase 1 finds top results by keyword/recency/importance, phase 2 boosts memories linked to those top results. Developers use consistent terminology — no vectors needed.',
+              },
+              {
+                q: 'What scale does it handle?',
+                a: 'Hard cap at 2,000 memories with auto-prune. Tested on 307 memories — recall returns in milliseconds. Built for a single project, not enterprise search.',
+              },
+              {
+                q: "How does it compare to Obsidian's graph?",
+                a: "Obsidian's graph is for humans to navigate visually. Rainman's graph is for machines to score — linked memories get boosted automatically on recall. Links are created automatically by keyword overlap, not manually.",
+              },
+              {
+                q: 'Can it remember tool configs, not just code?',
+                a: 'Yes. Any knowledge you can phrase as a sentence: deploy configs, tool settings, environment quirks. The PostToolUse hook also auto-captures commands and their results.',
+              },
+              {
+                q: 'When does the AI actually use Rainman?',
+                a: 'Three automatic triggers: SessionStart loads context at session begin. PostCompact re-injects after context loss. PostToolUse auto-learns from reads, edits, and test runs. Plus MCP tools let the AI search on demand.',
+              },
+              {
+                q: 'Does it replace memory.md / CLAUDE.md?',
+                a: "Yes. Instead of a static file the AI may or may not read, Rainman does contextual retrieval — the right memory surfaces at the right time, scored by relevance, recency, and importance.",
+              },
+            ].map((item, i) => (
+              <FadeDown key={i} delay={0.1 + i * 0.05}>
+                <div className="liquid-glass rounded-xl p-6 h-full">
+                  <h3 className="text-[#e8e8ed] font-medium mb-2">
+                    {item.q}
+                  </h3>
+                  <p className="text-white/40 text-sm leading-relaxed">
+                    {item.a}
+                  </p>
+                </div>
+              </FadeDown>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 8: CTA + Footer */}
       <section className="py-20 md:py-28 relative z-10">
         <div className="max-w-6xl mx-auto px-4 md:px-8 text-center">
           <FadeDown>
