@@ -273,6 +273,13 @@ def cmd_setup() -> None:
                 "command": f"{python_path} -m rainman.hooks.post_tool_use",
             }],
         }],
+        "SessionEnd": [{
+            "matcher": "",
+            "hooks": [{
+                "type": "command",
+                "command": f"{python_path} -m rainman.hooks.session_end",
+            }],
+        }],
     }
 
     try:

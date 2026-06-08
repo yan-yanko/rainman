@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.session_start"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.post_compact"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.post_tool_use"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.session_end"
+          }
+        ]
+      }
+    ]
+  }
+}

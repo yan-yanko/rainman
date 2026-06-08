@@ -272,3 +272,135 @@ class TestPostCompact:
         project, global_dir = project_dir
         result = _run_hook("rainman.hooks.post_compact", "not json!", project)
         assert result.returncode == 0
+
+
+def _create_transcript(path, entries):
+    """Create a JSONL transcript file with given entries."""
+    with open(path, "w", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+
+
+def _make_transcript_entries(assistant_texts, padding=True):
+    """Build transcript JSONL entries from assistant text strings.
+    Adds padding user messages to meet the MIN_TRANSCRIPT_LINES threshold."""
+    entries = []
+    for text in assistant_texts:
+        entries.append({"role": "user", "content": "continue"})
+        entries.append({"role": "assistant", "content": text})
+    if padding:
+        # Pad to >= 10 lines
+        while len(entries) < 12:
+            entries.append({"role": "user", "content": "ok"})
+            entries.append({"role": "assistant", "content": "Acknowledged."})
+    return entries
+
+
+@pytest.mark.unit
+class TestSessionEnd:
+    """session_end hook — captures key decisions from transcripts."""
+
+    def test_extracts_decisions(self, project_dir):
+        project, global_dir = project_dir
+        transcript_path = os.path.join(project, "transcript.jsonl")
+        entries = _make_transcript_entries([
+            "After reviewing the options, we decided to use Redis for caching because it supports TTL natively and has good Python bindings.",
+            "The fix is to add a retry mechanism with exponential backoff in the API client layer.",
+            "Just checking the status of the build.",
+        ])
+        _create_transcript(transcript_path, entries)
+
+        hook_input = {
+            "cwd": project,
+            "reason": "logout",
+            "transcript_path": transcript_path,
+        }
+        result = _run_hook("rainman.hooks.session_end", hook_input, project)
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""  # Silent hook
+
+        memories = _load_memories(project)
+        assert len(memories) >= 1
+        # Should capture the decision and/or the fix
+        contents = " ".join(m["content"] for m in memories)
+        assert "decided to" in contents.lower() or "fix is" in contents.lower()
+
+    def test_skips_short_sessions(self, project_dir):
+        project, global_dir = project_dir
+        transcript_path = os.path.join(project, "transcript.jsonl")
+        entries = [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+        _create_transcript(transcript_path, entries)
+
+        hook_input = {
+            "cwd": project,
+            "reason": "logout",
+            "transcript_path": transcript_path,
+        }
+        result = _run_hook("rainman.hooks.session_end", hook_input, project)
+        assert result.returncode == 0
+
+        memories = _load_memories(project)
+        assert len(memories) == 0
+
+    def test_skips_clear_reason(self, project_dir):
+        project, global_dir = project_dir
+        transcript_path = os.path.join(project, "transcript.jsonl")
+        entries = _make_transcript_entries([
+            "We decided to rewrite the entire auth module using JWT tokens.",
+        ])
+        _create_transcript(transcript_path, entries)
+
+        hook_input = {
+            "cwd": project,
+            "reason": "clear",
+            "transcript_path": transcript_path,
+        }
+        result = _run_hook("rainman.hooks.session_end", hook_input, project)
+        assert result.returncode == 0
+
+        memories = _load_memories(project)
+        assert len(memories) == 0
+
+    def test_missing_transcript_exits_cleanly(self, project_dir):
+        project, global_dir = project_dir
+        hook_input = {
+            "cwd": project,
+            "reason": "logout",
+            # No transcript_path
+        }
+        result = _run_hook("rainman.hooks.session_end", hook_input, project)
+        assert result.returncode == 0
+
+        memories = _load_memories(project)
+        assert len(memories) == 0
+
+    def test_malformed_json_exits_cleanly(self, project_dir):
+        project, global_dir = project_dir
+        result = _run_hook("rainman.hooks.session_end", "not valid json {{{", project)
+        assert result.returncode == 0
+        assert "failed to parse" in result.stderr.lower()
+
+    def test_caps_at_5_memories(self, project_dir):
+        project, global_dir = project_dir
+        transcript_path = os.path.join(project, "transcript.jsonl")
+        # Create many distinct decisions spread across the transcript
+        texts = [
+            f"We decided to use approach_{i} for the module_{i} component because it handles edge cases better and provides cleaner separation of concerns."
+            for i in range(15)
+        ]
+        entries = _make_transcript_entries(texts)
+        _create_transcript(transcript_path, entries)
+
+        hook_input = {
+            "cwd": project,
+            "reason": "logout",
+            "transcript_path": transcript_path,
+        }
+        result = _run_hook("rainman.hooks.session_end", hook_input, project)
+        assert result.returncode == 0
+
+        memories = _load_memories(project)
+        assert len(memories) <= 5
