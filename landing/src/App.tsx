@@ -224,7 +224,7 @@ export default function App() {
 
         {/* Bottom badges */}
         <FadeDown delay={1.2}>
-          <div className="flex items-center justify-center gap-4 md:gap-8 py-8 md:py-12 text-[10px] md:text-xs text-white/25 uppercase tracking-wider">
+          <div className="flex items-center justify-center gap-4 md:gap-8 py-8 md:py-12 text-[10px] md:text-xs text-white/50 uppercase tracking-wider">
             <span>124 tests</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>0 dependencies</span>
@@ -250,7 +250,7 @@ export default function App() {
             </h2>
           </FadeDown>
           <FadeDown delay={0.2}>
-            <p className="text-white/40 max-w-3xl mb-12 leading-relaxed">
+            <p className="text-white/60 max-w-3xl mb-12 leading-relaxed">
               We were debugging a systematic voting bias in an election predictor.
               The AI assistant declared the problem "unfixable by prompt
               engineering" and spent hours exploring workarounds. The fix already
@@ -295,7 +295,7 @@ export default function App() {
                   <h3 className="text-[#e8e8ed] font-medium mb-2">
                     {card.title}
                   </h3>
-                  <p className="text-white/40 text-sm leading-relaxed">
+                  <p className="text-white/60 text-sm leading-relaxed">
                     {card.body}
                   </p>
                 </div>
@@ -314,7 +314,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium text-lg mb-3">
                   grep searches files. Rainman stores knowledge.
                 </h3>
-                <p className="text-white/40 text-sm leading-relaxed">
+                <p className="text-white/60 text-sm leading-relaxed">
                   grep finds text that exists in your codebase. Rainman stores
                   knowledge <em className="text-white/60">about</em> your
                   codebase — what failed, what worked, why decisions were made.
@@ -329,7 +329,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium text-lg mb-3">
                   grep waits for you. Rainman fires automatically.
                 </h3>
-                <p className="text-white/40 text-sm leading-relaxed">
+                <p className="text-white/60 text-sm leading-relaxed">
                   You have to know what to search for with grep. Rainman
                   activates via hooks — when a session starts, when context
                   compacts, when tools run. The AI doesn't need to "remember" to
@@ -356,7 +356,7 @@ export default function App() {
             </h2>
           </FadeDown>
           <FadeDown delay={0.2}>
-            <p className="text-white/40 max-w-2xl mb-12 leading-relaxed">
+            <p className="text-white/60 max-w-2xl mb-12 leading-relaxed">
               Tested on the same codebase where the problem was discovered. 307
               memories ingested from git history, file structure, and manual
               learnings.
@@ -430,7 +430,7 @@ export default function App() {
             </h2>
           </FadeDown>
           <FadeDown delay={0.2}>
-            <p className="text-white/40 max-w-2xl mb-12 leading-relaxed">
+            <p className="text-white/60 max-w-2xl mb-12 leading-relaxed">
               Every memory gets a composite score from four components. No
               embeddings, no API calls — keyword matching, math, and cognitive
               science.
@@ -478,7 +478,7 @@ export default function App() {
                       w: {card.weight}
                     </span>
                   </div>
-                  <p className="text-white/40 text-sm leading-relaxed">
+                  <p className="text-white/60 text-sm leading-relaxed">
                     {card.body}
                   </p>
                 </div>
@@ -512,7 +512,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium mb-2">
                   5 tools for Claude Code
                 </h3>
-                <p className="text-white/40 text-sm mb-4 leading-relaxed">
+                <p className="text-white/60 text-sm mb-4 leading-relaxed">
                   recall, remember, context, links, status. Claude searches your
                   memory before declaring anything unsolvable.
                 </p>
@@ -529,7 +529,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium mb-2">
                   Full command line
                 </h3>
-                <p className="text-white/40 text-sm mb-4 leading-relaxed">
+                <p className="text-white/60 text-sm mb-4 leading-relaxed">
                   init, add, recall, status, links, context, ingest, export,
                   serve. Works standalone or alongside MCP.
                 </p>
@@ -553,7 +553,7 @@ export default function App() {
                   <h3 className="text-[#e8e8ed] font-medium text-lg mb-2">
                     PostCompact: The Killer Feature
                   </h3>
-                  <p className="text-white/40 text-sm leading-relaxed">
+                  <p className="text-white/60 text-sm leading-relaxed">
                     When Claude's context gets compacted during long sessions,
                     memories disappear. Rainman's PostCompact hook fires at
                     exactly that moment — it reads the compaction summary, recalls
@@ -576,7 +576,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium mb-2">
                   Context from day one
                 </h3>
-                <p className="text-white/40 text-sm leading-relaxed">
+                <p className="text-white/60 text-sm leading-relaxed">
                   Every new session starts with your project's top memories
                   loaded. Claude knows what exists before you ask.
                 </p>
@@ -590,7 +590,7 @@ export default function App() {
                 <h3 className="text-[#e8e8ed] font-medium mb-2">
                   Auto-learn silently
                 </h3>
-                <p className="text-white/40 text-sm leading-relaxed">
+                <p className="text-white/60 text-sm leading-relaxed">
                   When Claude reads a file, edits code, or runs tests — Rainman
                   records it. No manual input. Knowledge accumulates.
                 </p>
@@ -624,7 +624,7 @@ export default function App() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-[#e8e8ed] font-medium mb-2">Install</h3>
-                  <p className="text-white/40 text-sm mb-4">
+                  <p className="text-white/60 text-sm mb-4">
                     Pure Python, zero dependencies. Works on any OS with Python
                     3.10+.
                   </p>
@@ -643,7 +643,7 @@ export default function App() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-[#e8e8ed] font-medium mb-2">Setup</h3>
-                  <p className="text-white/40 text-sm mb-4">
+                  <p className="text-white/60 text-sm mb-4">
                     One command configures everything — initializes storage,
                     registers the MCP server with Claude Code, installs all three
                     hooks, and creates your project config.
@@ -676,7 +676,7 @@ export default function App() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-[#e8e8ed] font-medium mb-2">Verify</h3>
-                  <p className="text-white/40 text-sm mb-4">
+                  <p className="text-white/60 text-sm mb-4">
                     Self-test confirms engine, persistence, hooks, and MCP
                     integration are all working.
                   </p>
@@ -703,7 +703,7 @@ export default function App() {
               <h3 className="text-[#e8e8ed] font-medium mb-2">
                 Set up once. Remember forever.
               </h3>
-              <p className="text-white/40 text-sm leading-relaxed">
+              <p className="text-white/60 text-sm leading-relaxed">
                 No re-activation between sessions. No manual input. Rainman's
                 hooks fire automatically every time a session starts, every time
                 context compacts, every time a tool runs. Memories persist on disk
@@ -751,7 +751,7 @@ export default function App() {
                     className={
                       platform.highlight
                         ? 'text-accent text-sm'
-                        : 'text-white/40 text-sm'
+                        : 'text-white/60 text-sm'
                     }
                   >
                     {platform.desc}
@@ -762,7 +762,7 @@ export default function App() {
           </div>
 
           <FadeDown delay={0.5}>
-            <p className="text-white/30 text-sm leading-relaxed max-w-3xl">
+            <p className="text-white/50 text-sm leading-relaxed max-w-3xl">
               The core engine and MCP server work with any MCP-compatible client.
               Claude Code gets the deepest integration with automatic hooks for
               session start, context compaction, and tool usage. CLI works
@@ -829,7 +829,7 @@ export default function App() {
                   <h3 className="text-[#e8e8ed] font-medium mb-2">
                     {item.q}
                   </h3>
-                  <p className="text-white/40 text-sm leading-relaxed">
+                  <p className="text-white/60 text-sm leading-relaxed">
                     {item.a}
                   </p>
                 </div>
@@ -877,7 +877,7 @@ export default function App() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 py-8">
         <div className="max-w-6xl mx-auto px-4 md:px-8 text-center">
-          <p className="text-white/25 text-sm">
+          <p className="text-white/50 text-sm">
             Rainman — by Yan Yanko. MIT License. Zero LLM. Zero tokens. Runs
             locally.
           </p>

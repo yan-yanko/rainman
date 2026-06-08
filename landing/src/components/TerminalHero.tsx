@@ -68,7 +68,7 @@ export function TerminalHero() {
           <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
           <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
           <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-          <span className="flex-1 text-center text-xs text-white/30 font-mono">
+          <span className="flex-1 text-center text-xs text-white/50 font-mono">
             rainman
           </span>
         </div>
@@ -77,7 +77,7 @@ export function TerminalHero() {
         <div className="p-5 md:p-6 font-mono text-sm md:text-base leading-relaxed min-h-[280px] md:min-h-[320px]">
           {/* Command line */}
           <div className="text-[#e8e8ed]">
-            <span className="text-white/40">$</span>{' '}
+            <span className="text-white/60">$</span>{' '}
             <span>{displayedCommand.slice(2)}</span>
             {showCursor && (
               <span className="cursor-blink text-accent">▋</span>
@@ -90,7 +90,7 @@ export function TerminalHero() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className="mt-4 text-white/30 text-xs md:text-sm"
+              className="mt-4 text-white/50 text-xs md:text-sm"
             >
               {STATUS}
             </motion.div>
