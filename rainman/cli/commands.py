@@ -321,7 +321,7 @@ def cmd_setup() -> None:
         "mcpServers": {
             "rainman": {
                 "type": "stdio",
-                "command": python_path,
+                "command": "python",
                 "args": ["-m", "rainman", "serve"],
             }
         }
@@ -344,6 +344,39 @@ def cmd_setup() -> None:
     except Exception as e:
         errors.append(".mcp.json")
         print(f"   Warning: could not write .mcp.json: {e}")
+
+    # Step 5: Create .vscode/mcp.json for VS Code (Copilot / Cline)
+    print("\n5. Creating .vscode/mcp.json (VS Code support) ...")
+    vscode_dir = os.path.join(project_dir, ".vscode")
+    os.makedirs(vscode_dir, exist_ok=True)
+    vscode_mcp_path = os.path.join(vscode_dir, "mcp.json")
+    vscode_mcp_config = {
+        "servers": {
+            "rainman": {
+                "command": "python",
+                "args": ["-m", "rainman", "serve"],
+            }
+        }
+    }
+    try:
+        if os.path.exists(vscode_mcp_path):
+            with open(vscode_mcp_path, encoding="utf-8") as f:
+                existing = json.load(f)
+            if "rainman" not in existing.get("servers", {}):
+                existing.setdefault("servers", {})["rainman"] = vscode_mcp_config["servers"]["rainman"]
+                with open(vscode_mcp_path, "w", encoding="utf-8") as f:
+                    json.dump(existing, f, indent=2)
+                print(f"   Done: added to existing {vscode_mcp_path}")
+            else:
+                print(f"   Skipped: rainman already in {vscode_mcp_path}")
+        else:
+            with open(vscode_mcp_path, "w", encoding="utf-8") as f:
+                json.dump(vscode_mcp_config, f, indent=2)
+            print(f"   Done: {vscode_mcp_path}")
+        print("   → Open Copilot Chat → select Agent mode → Rainman tools available")
+    except Exception as e:
+        errors.append(".vscode/mcp.json")
+        print(f"   Warning: could not write .vscode/mcp.json: {e}")
 
     # Summary
     print(f"\n{'=' * 50}")

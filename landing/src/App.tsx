@@ -739,7 +739,8 @@ export default function App() {
               { name: 'Cursor', desc: 'MCP server + rules file', highlight: false },
               { name: 'Windsurf', desc: 'MCP server', highlight: false },
               { name: 'Continue.dev', desc: 'MCP server', highlight: false },
-              { name: 'Copilot', desc: 'MCP server', highlight: false },
+              { name: 'VS Code Copilot', desc: 'MCP server (Agent mode)', highlight: false },
+              { name: 'Cline', desc: 'MCP server', highlight: false },
               { name: 'Any MCP Client', desc: 'JSON-RPC 2.0 stdio', highlight: false },
             ].map((platform, i) => (
               <FadeDown key={platform.name} delay={0.2 + i * 0.05}>
@@ -765,8 +766,10 @@ export default function App() {
             <p className="text-white/50 text-sm leading-relaxed max-w-3xl">
               The core engine and MCP server work with any MCP-compatible client.
               Claude Code gets the deepest integration with automatic hooks for
-              session start, context compaction, and tool usage. CLI works
-              standalone everywhere.
+              session start, context compaction, and tool usage. For VS Code,
+              run <code className="text-accent/80">rainman setup</code> — it creates{' '}
+              <code className="text-accent/80">.vscode/mcp.json</code> automatically.
+              CLI works standalone everywhere.
             </p>
           </FadeDown>
         </div>
@@ -822,6 +825,10 @@ export default function App() {
               {
                 q: 'Does it replace memory.md / CLAUDE.md?',
                 a: "Yes. Instead of a static file the AI may or may not read, Rainman does contextual retrieval — the right memory surfaces at the right time, scored by relevance, recency, and importance.",
+              },
+              {
+                q: 'Does it work with VS Code?',
+                a: "Yes. Rainman is a standard MCP server. Run rainman setup and it creates .vscode/mcp.json automatically. Works with GitHub Copilot (Agent mode), Continue, and Cline. Hooks are Claude Code only, but the 5 MCP tools work everywhere.",
               },
             ].map((item, i) => (
               <FadeDown key={i} delay={0.1 + i * 0.05}>

@@ -55,23 +55,36 @@ rainman status
 rainman context
 ```
 
-## Claude Code Integration
+## Editor Integration
 
-### MCP Server (recommended)
+### Automatic Setup (recommended)
 
-Register Rainman as an MCP tool provider — Claude gets 5 tools: `recall`, `remember`, `context`, `links`, `status`.
+```bash
+rainman setup
+```
+
+This registers Rainman with **both** Claude Code and VS Code in one command:
+- Creates `.claude/settings.json` with hooks
+- Creates `.mcp.json` for Claude Code MCP
+- Creates `.vscode/mcp.json` for VS Code Copilot / Cline
+- Registers the MCP server with `claude mcp add`
+
+### Claude Code
+
+MCP server gives Claude 5 tools: `recall`, `remember`, `context`, `links`, `status`.
 
 ```bash
 claude mcp add rainman -- python -m rainman serve
 ```
 
-Or add to your project's `.mcp.json`:
+### VS Code (Copilot / Continue / Cline)
+
+`rainman setup` creates `.vscode/mcp.json` automatically. Or add manually:
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "rainman": {
-      "type": "stdio",
       "command": "python",
       "args": ["-m", "rainman", "serve"]
     }
@@ -79,7 +92,9 @@ Or add to your project's `.mcp.json`:
 }
 ```
 
-### Hooks
+Open Copilot Chat → select **Agent mode** → Rainman tools are available.
+
+### Hooks (Claude Code only)
 
 Add to `.claude/settings.json` for automatic memory management:
 
@@ -106,6 +121,13 @@ Add to `.claude/settings.json` for automatic memory management:
         "type": "command",
         "command": "python -m rainman.hooks.post_tool_use"
       }]
+    }],
+    "SessionEnd": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "python -m rainman.hooks.session_end"
+      }]
     }]
   }
 }
@@ -116,6 +138,7 @@ Add to `.claude/settings.json` for automatic memory management:
 | **SessionStart** | New session | Loads project context so Claude starts with knowledge of what exists |
 | **PostCompact** | Context compaction | Re-injects relevant memories after context loss (the killer feature) |
 | **PostToolUse** | After Read/Edit/Bash | Auto-learns from file reads, edits, and test runs |
+| **SessionEnd** | Session close | Captures key decisions from the conversation transcript |
 
 **PostCompact is the killer feature.** When Claude's context gets compacted during long sessions, memories are lost. This hook fires at exactly that moment, recalls relevant knowledge, and re-injects it into Claude's fresh context.
 
@@ -185,6 +208,7 @@ rainman/
     session_start.py   Load project context at session start
     post_compact.py    Re-inject memories after context compaction
     post_tool_use.py   Auto-learn from file reads, edits, test runs
+    session_end.py     Capture key decisions from conversations
   ingest/
     git.py          Parse git log into memories
     files.py        Scan project file tree into memories
@@ -195,7 +219,7 @@ tests/
   test_sentiment.py 10 sentiment tests
 ```
 
-57 unit tests. Zero external dependencies. <1s test suite.
+130 unit tests. Zero external dependencies. <1s test suite.
 
 ## CLI Reference
 
