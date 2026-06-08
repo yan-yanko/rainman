@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.session_start"
+            "command": "python -m rainman.hooks.session_start"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.post_compact"
+            "command": "python -m rainman.hooks.post_compact"
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.post_tool_use"
+            "command": "python -m rainman.hooks.post_tool_use"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\yanko\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m rainman.hooks.session_end"
+            "command": "python -m rainman.hooks.session_end"
           }
         ]
       }

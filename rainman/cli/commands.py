@@ -251,33 +251,35 @@ def cmd_setup() -> None:
     os.makedirs(claude_dir, exist_ok=True)
     settings_path = os.path.join(claude_dir, "settings.json")
 
+    # Use "python" (not sys.executable) because Claude Code runs hooks
+    # through /usr/bin/bash which strips Windows backslashes from paths.
     hooks_config = {
         "SessionStart": [{
             "matcher": "",
             "hooks": [{
                 "type": "command",
-                "command": f"{python_path} -m rainman.hooks.session_start",
+                "command": "python -m rainman.hooks.session_start",
             }],
         }],
         "PostCompact": [{
             "matcher": "auto",
             "hooks": [{
                 "type": "command",
-                "command": f"{python_path} -m rainman.hooks.post_compact",
+                "command": "python -m rainman.hooks.post_compact",
             }],
         }],
         "PostToolUse": [{
             "matcher": "",
             "hooks": [{
                 "type": "command",
-                "command": f"{python_path} -m rainman.hooks.post_tool_use",
+                "command": "python -m rainman.hooks.post_tool_use",
             }],
         }],
         "SessionEnd": [{
             "matcher": "",
             "hooks": [{
                 "type": "command",
-                "command": f"{python_path} -m rainman.hooks.session_end",
+                "command": "python -m rainman.hooks.session_end",
             }],
         }],
     }
