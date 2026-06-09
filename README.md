@@ -4,7 +4,9 @@
 
 Context-aware project memory for AI coding tools. Remembers what you've built, what failed, what works — and surfaces it when your AI assistant needs it.
 
-**Zero LLM. Zero tokens. Zero external dependencies. Runs locally.**
+**Zero LLM calls. Zero external dependencies. Runs locally.**
+
+No embeddings, no API calls — zero tokens to store and rank memory. Recalled memories are injected as ordinary context (the relevant slice, not your whole history), so they cost normal input tokens only when actually used — fewer than pasting your full CLAUDE.md into every prompt.
 
 ## Why This Exists
 

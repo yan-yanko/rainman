@@ -171,7 +171,7 @@ export default function App() {
               solutions, decisions — remembered across every session.
             </p>
             <p className="text-center text-white text-sm md:text-base lg:text-lg mb-5 md:mb-6">
-              &#x2022; Zero LLM &nbsp; &#x2022; Zero tokens &nbsp; &#x2022; Zero dependencies
+              &#x2022; Zero LLM calls &nbsp; &#x2022; Runs locally &nbsp; &#x2022; Zero dependencies
             </p>
           </FadeDown>
 
@@ -800,7 +800,7 @@ export default function App() {
               },
               {
                 q: "Doesn't it burn tokens?",
-                a: "Zero. No LLM at any stage — not on store, not on recall, not on scoring. It's pure Python math. The AI reads the results the same way it reads any text, but Rainman itself consumes zero tokens.",
+                a: "Not where other memory tools do. Storing, scoring, and ranking memories is pure Python math — no embeddings, no LLM calls, zero tokens. The memories Rainman surfaces are then injected as ordinary context, so they cost normal input tokens when the AI reads them — but only the relevant slice, never your whole history. Net: fewer tokens than pasting your full CLAUDE.md into every prompt.",
               },
               {
                 q: 'How does associative linking work without embeddings?',
@@ -885,7 +885,7 @@ export default function App() {
       <footer className="relative z-10 border-t border-white/5 py-8">
         <div className="max-w-6xl mx-auto px-4 md:px-8 text-center">
           <p className="text-white/50 text-sm">
-            Rainman — by Yan Yanko. MIT License. Zero LLM. Zero tokens. Runs
+            Rainman — by Yan Yanko. MIT License. Zero LLM calls. Runs
             locally.
           </p>
         </div>

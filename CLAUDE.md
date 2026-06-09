@@ -6,7 +6,7 @@
 
 Rainman is a standalone developer memory tool that plugs into AI coding workflows via MCP and Claude Code hooks. It remembers what you've built, what failed, what works — and surfaces relevant knowledge when the AI needs it, without being asked.
 
-Zero LLM. Zero tokens. Runs locally. Zero external dependencies (stdlib only).
+Zero LLM calls. Runs locally. Zero external dependencies (stdlib only). Storing and ranking memory spends zero tokens; recalled memories are injected as normal context, so they cost input tokens only when actually surfaced to the model.
 
 Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-shaped memory), stripping Big Five personality dependencies, and adapting it for project knowledge retrieval.
 
@@ -126,7 +126,7 @@ Register: `claude mcp add rainman -- python -m rainman serve`
 ## Hard Rules
 
 - **Zero external dependencies.** stdlib only. No pip install needed beyond setuptools.
-- **Zero LLM calls.** All scoring is keyword matching + math. No tokens consumed.
+- **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
 - **Never break the 57 existing tests.** Run `pytest tests/ -m unit` before any change.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **Auto-link threshold: 0.25.** New memories auto-link to existing ones if keyword overlap >= 25%.
