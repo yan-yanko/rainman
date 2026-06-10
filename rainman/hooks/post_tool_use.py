@@ -60,6 +60,14 @@ def main():
     if len(content) < MIN_CONTENT_LENGTH:
         sys.exit(0)
 
+    # Redact secrets before storing
+    from rainman.core.redact import safe_content
+
+    safe = safe_content(content, file_path=file_refs[0] if file_refs else None)
+    if safe is None:
+        sys.exit(0)  # Sensitive file or content too redacted to be useful
+    content = safe
+
     from rainman.core.engine import RainmanEngine
 
     engine = RainmanEngine(project_dir=cwd)
@@ -123,12 +131,13 @@ def _extract_learning(tool_name, tool_input, tool_output):
 
         # Only record test runs, builds, and significant commands
         if any(kw in command for kw in ["pytest", "test", "build", "deploy", "migrate"]):
-            passed = "passed" in output_str.lower() or "success" in output_str.lower()
             failed = "failed" in output_str.lower() or "error" in output_str.lower()
-            if passed:
-                return (f"Command succeeded: {command[:100]}", "note", [])
-            elif failed:
+            passed = "passed" in output_str.lower() or "success" in output_str.lower()
+            # Check failure first — "30 failed, 100 passed" contains both words
+            if failed:
                 return (f"Command failed: {command[:100]} — {output_str[:150]}", "failure", [])
+            elif passed:
+                return (f"Command succeeded: {command[:100]}", "note", [])
 
     return None
 

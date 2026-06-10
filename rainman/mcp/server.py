@@ -187,6 +187,9 @@ class RainmanMCPServer:
             return self._response(msg_id, {})
 
         else:
+            # JSON-RPC 2.0: don't respond to notifications (no id)
+            if msg_id is None:
+                return None
             return self._error(msg_id, -32601, f"Unknown method: {method}")
 
     def _call_tool(self, name: str, args: Dict[str, Any]) -> Dict:

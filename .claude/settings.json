@@ -11,17 +11,6 @@
         ]
       }
     ],
-    "PostCompact": [
-      {
-        "matcher": "auto",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python -m rainman.hooks.post_compact"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "",

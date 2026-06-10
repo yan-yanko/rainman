@@ -55,6 +55,9 @@ rainman recall "memory leak" -c failure
 # Show what Rainman knows
 rainman status
 rainman context
+
+# Check installation health
+rainman doctor
 ```
 
 ## Editor Integration
@@ -110,13 +113,6 @@ Add to `.claude/settings.json` for automatic memory management:
         "command": "python -m rainman.hooks.session_start"
       }]
     }],
-    "PostCompact": [{
-      "matcher": "auto",
-      "hooks": [{
-        "type": "command",
-        "command": "python -m rainman.hooks.post_compact"
-      }]
-    }],
     "PostToolUse": [{
       "matcher": "",
       "hooks": [{
@@ -137,12 +133,11 @@ Add to `.claude/settings.json` for automatic memory management:
 
 | Hook | Event | What It Does |
 |------|-------|-------------|
-| **SessionStart** | New session | Loads project context so Claude starts with knowledge of what exists |
-| **PostCompact** | Context compaction | Re-injects relevant memories after context loss (the killer feature) |
+| **SessionStart** | New session / resume / compaction | Loads project context; after compaction, re-injects topical + important memories |
 | **PostToolUse** | After Read/Edit/Bash | Auto-learns from file reads, edits, and test runs |
 | **SessionEnd** | Session close | Captures key decisions from the conversation transcript |
 
-**PostCompact is the killer feature.** When Claude's context gets compacted during long sessions, memories are lost. This hook fires at exactly that moment, recalls relevant knowledge, and re-injects it into Claude's fresh context.
+**Compaction recovery is the killer feature.** When Claude's context gets compacted during long sessions, memories are lost. The SessionStart hook fires at exactly that moment (with `source: compact`), reads the recent transcript to understand the current topic, recalls relevant knowledge, and re-injects it into Claude's fresh context. Your AI picks up where it left off.
 
 ## How It Works
 
@@ -156,6 +151,8 @@ Every memory gets a composite score when recalled:
 | Recency | 0.25 | ACT-R power-law decay (14-day half-life, reset on access) |
 | Importance | 0.20 | Category-based (failures=0.9, solutions=0.8) + keyword boost |
 | Associative | 0.20 | Boost from being linked to other high-scoring memories |
+
+Rehearsal multipliers are capped (keyword: max 2x, recency: max 2.5x) to prevent frequently-recalled memories from permanently outranking fresh exact matches.
 
 ### Two-Phase Retrieval
 
@@ -171,7 +168,7 @@ This means when you recall a memory about "voting bias", related memories about 
 <project>/.rainman/      Project (git-committable, team-shareable)
 ```
 
-Project memories get a 1.2x relevance boost. Both layers merge on recall.
+Project memories get a 1.2x relevance boost. Both layers merge on recall. Multi-process writes (hooks + MCP server running simultaneously) are protected by file locking.
 
 ### Memory Categories
 
@@ -192,6 +189,14 @@ New memories automatically link to existing ones when keyword overlap exceeds 25
 
 Every memory gets automatic sentiment classification using keyword matching (zero LLM). Six categories: positive, negative, neutral, anxious, frustrated, excited. Developer-specific terms included (regression, workaround, hack = frustrated; deployed, shipped, works = positive).
 
+### Secret Redaction
+
+Auto-learn hooks (PostToolUse, SessionEnd) automatically redact sensitive content before storing:
+- **Sensitive file paths** (`.env`, `*.pem`, `credentials*`, `*_rsa*`) are skipped entirely
+- **Secret patterns** (AWS keys, GitHub tokens, API keys, PEM headers, bearer tokens) are replaced with `[REDACTED]`
+
+This matters because `.rainman/` is designed to be git-committable. Secrets never enter the memory store.
+
 ## Architecture
 
 ```
@@ -201,14 +206,15 @@ rainman/
     scoring.py      Keyword, temporal decay, importance, associative scoring
     sentiment.py    Keyword-based sentiment classifier (zero LLM)
     engine.py       Core: add, recall, context, links, forget, persist
-    store.py        Layered JSON persistence (global + project)
+    store.py        Layered JSON persistence (global + project) with file locking
+    redact.py       Secret redaction + path denylist for auto-learn safety
   mcp/
     server.py       MCP stdio server (JSON-RPC 2.0, 5 tools)
   cli/
-    commands.py     CLI command implementations
+    commands.py     CLI command implementations (init, add, recall, setup, doctor)
   hooks/
-    session_start.py   Load project context at session start
-    post_compact.py    Re-inject memories after context compaction
+    session_start.py   Load project context + compaction recovery
+    post_compact.py    Legacy compaction hook (kept for backward compatibility)
     post_tool_use.py   Auto-learn from file reads, edits, test runs
     session_end.py     Capture key decisions from conversations
   ingest/
@@ -216,12 +222,17 @@ rainman/
     files.py        Scan project file tree into memories
   __main__.py       CLI entry point
 tests/
-  test_scoring.py   22 scoring tests
-  test_engine.py    25 engine tests
-  test_sentiment.py 10 sentiment tests
+  test_scoring.py     Scoring tests
+  test_engine.py      Engine tests
+  test_sentiment.py   Sentiment tests
+  test_hooks.py       Hook tests
+  test_mcp.py         MCP protocol tests
+  test_cli.py         CLI smoke tests
+  test_ingest.py      Ingest tests
+  test_regressions.py Regression tests
 ```
 
-130 unit tests. Zero external dependencies. <1s test suite.
+130 unit tests. Zero external dependencies. <3s test suite.
 
 ## CLI Reference
 
@@ -245,6 +256,8 @@ rainman ingest [options]                  Ingest project history
   --depth N                               Max directory depth (default: 4)
 rainman export                            Dump all as JSON
 rainman serve                             Start MCP stdio server
+rainman setup                             Register hooks + MCP for Claude Code + VS Code
+rainman doctor                            Self-diagnosis of installation health
 ```
 
 ## Origin

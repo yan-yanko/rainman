@@ -225,11 +225,11 @@ export default function App() {
         {/* Bottom badges */}
         <FadeDown delay={1.2}>
           <div className="flex items-center justify-center gap-4 md:gap-8 py-8 md:py-12 text-[10px] md:text-xs text-white/50 uppercase tracking-wider">
-            <span>124 tests</span>
+            <span>130 tests</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>0 dependencies</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
-            <span>&lt;1s test suite</span>
+            <span>&lt;3s test suite</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>MIT license</span>
           </div>
@@ -443,7 +443,7 @@ export default function App() {
               {
                 icon: Search,
                 title: 'Keyword Match',
-                body: 'Overlap between query and memory content, tags, and file references. Rehearsal boost for frequently accessed memories.',
+                body: 'Overlap between query and memory content, tags, and file references. Capped rehearsal boost for frequently accessed memories (max 2x) prevents stale memories from dominating.',
                 weight: '0.35',
               },
               {
@@ -551,15 +551,15 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-[#e8e8ed] font-medium text-lg mb-2">
-                    PostCompact: The Killer Feature
+                    Compaction Recovery: The Killer Feature
                   </h3>
                   <p className="text-white/60 text-sm leading-relaxed">
                     When Claude's context gets compacted during long sessions,
-                    memories disappear. Rainman's PostCompact hook fires at
-                    exactly that moment — it reads the compaction summary, recalls
-                    relevant knowledge, and re-injects it into Claude's fresh
-                    context. The one moment everything gets lost is the one moment
-                    Rainman activates.
+                    memories disappear. Rainman's SessionStart hook fires at
+                    exactly that moment — it reads the recent transcript to understand
+                    what you were working on, recalls relevant knowledge, and
+                    re-injects it into Claude's fresh context. The one moment
+                    everything gets lost is the one moment Rainman activates.
                   </p>
                 </div>
               </div>
@@ -657,8 +657,8 @@ export default function App() {
                       &#10003; MCP server registered with Claude Code
                     </p>
                     <p className="text-accent">
-                      &#10003; Hooks installed (SessionStart, PostCompact,
-                      PostToolUse)
+                      &#10003; Hooks installed (SessionStart, PostToolUse,
+                      SessionEnd)
                     </p>
                     <p className="text-accent">
                       &#10003; Project config created
@@ -820,7 +820,7 @@ export default function App() {
               },
               {
                 q: 'When does the AI actually use Rainman?',
-                a: 'Three automatic triggers: SessionStart loads context at session begin. PostCompact re-injects after context loss. PostToolUse auto-learns from reads, edits, and test runs. Plus MCP tools let the AI search on demand.',
+                a: 'Three automatic triggers: SessionStart loads context at session begin and re-injects after compaction. PostToolUse auto-learns from reads, edits, and test runs. SessionEnd captures key decisions from conversations. Plus MCP tools let the AI search on demand.',
               },
               {
                 q: 'Does it replace memory.md / CLAUDE.md?',
@@ -829,6 +829,14 @@ export default function App() {
               {
                 q: 'Does it work with VS Code?',
                 a: "Yes. Rainman is a standard MCP server. Run rainman setup and it creates .vscode/mcp.json automatically. Works with GitHub Copilot (Agent mode), Continue, and Cline. Hooks are Claude Code only, but the 5 MCP tools work everywhere.",
+              },
+              {
+                q: 'Is it safe to git-commit .rainman/?',
+                a: "Yes. Auto-learn hooks automatically redact secrets before storing — sensitive file paths (.env, *.pem, credentials) are skipped entirely, and content patterns (AWS keys, GitHub tokens, API keys) are replaced with [REDACTED]. Secrets never enter the memory store.",
+              },
+              {
+                q: 'Can multiple processes write simultaneously?',
+                a: "Yes. Hooks and the MCP server can run in parallel safely. All writes use file locking with reload-before-write to prevent data loss. Corrupted files are quarantined (not wiped) for recovery.",
               },
             ].map((item, i) => (
               <FadeDown key={i} delay={0.1 + i * 0.05}>

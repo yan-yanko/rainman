@@ -7,10 +7,14 @@ Project memories get a 1.2x boost on recall.
 
 JSON files, human-readable, git-committable.
 No database. No server.
+
+Multi-process safety: all writes use lockfile + reload-before-write
+to prevent clobbering between hooks and MCP server.
 """
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -20,6 +24,11 @@ from rainman.core.models import Memory
 # Default directories
 GLOBAL_DIR = os.path.join(str(Path.home()), ".rainman")
 PROJECT_DIR_NAME = ".rainman"
+
+# Lock settings
+LOCK_TIMEOUT = 5.0  # seconds
+LOCK_RETRY_INTERVAL = 0.05  # seconds
+LOCK_STALE_AGE = 30.0  # seconds — stale lock TTL
 
 
 class MemoryStore:
@@ -61,15 +70,15 @@ class MemoryStore:
 
         # Save global
         global_path = os.path.join(self._global_dir, "memories.json")
-        self._save_file(global_path, global_memories)
+        self._locked_save(global_path, global_memories)
 
         # Save project
         if self._project_dir:
             project_path = os.path.join(self._project_dir, "memories.json")
-            self._save_file(project_path, project_memories)
+            self._locked_save(project_path, project_memories)
 
     def save_one(self, memory: Memory) -> None:
-        """Append or update a single memory in the appropriate layer."""
+        """Append or update a single memory in the appropriate layer (locked)."""
         if memory.layer == "global":
             path = os.path.join(self._global_dir, "memories.json")
         elif self._project_dir:
@@ -79,29 +88,49 @@ class MemoryStore:
             memory.layer = "global"
             path = os.path.join(self._global_dir, "memories.json")
 
-        existing = self._load_file(path, layer=memory.layer)
-        # Update in-place if memory already exists, else append
-        updated = False
-        for i, m in enumerate(existing):
-            if m.id == memory.id:
-                existing[i] = memory
-                updated = True
-                break
-        if not updated:
+        def _merge(existing: List[Memory]) -> List[Memory]:
+            # Update in-place if memory already exists, else append
+            for i, m in enumerate(existing):
+                if m.id == memory.id:
+                    existing[i] = memory
+                    return existing
             existing.append(memory)
-        self._save_file(path, existing)
+            return existing
+
+        self._locked_read_modify_write(path, memory.layer, _merge)
 
     def save_layers(self, memories: List[Memory], layers: set) -> None:
         """Save only the specified layers. Avoids full rewrite on recall."""
         if "global" in layers:
             global_memories = [m for m in memories if m.layer == "global"]
             global_path = os.path.join(self._global_dir, "memories.json")
-            self._save_file(global_path, global_memories)
+            self._locked_save(global_path, global_memories)
 
         if "project" in layers and self._project_dir:
             project_memories = [m for m in memories if m.layer == "project"]
             project_path = os.path.join(self._project_dir, "memories.json")
-            self._save_file(project_path, project_memories)
+            self._locked_save(project_path, project_memories)
+
+    def update_rehearsal_stats(self, updates: Dict[str, dict], layer: str) -> None:
+        """
+        Update recall_count and last_recalled for specific memory IDs.
+        Locked delta operation — doesn't require full snapshot.
+        """
+        if layer == "global":
+            path = os.path.join(self._global_dir, "memories.json")
+        elif self._project_dir:
+            path = os.path.join(self._project_dir, "memories.json")
+        else:
+            return
+
+        def _apply_stats(existing: List[Memory]) -> List[Memory]:
+            for m in existing:
+                if m.id in updates:
+                    m.recall_count = updates[m.id].get("recall_count", m.recall_count)
+                    m.last_recalled = updates[m.id].get("last_recalled", m.last_recalled)
+            return existing
+
+        self._locked_read_modify_write(path, layer, _apply_stats)
 
     def init_project(self, project_dir: str) -> str:
         """Initialize .rainman/ in a project directory."""
@@ -158,6 +187,81 @@ class MemoryStore:
             "top_tags": sorted(all_tags.items(), key=lambda x: x[1], reverse=True)[:10],
         }
 
+    # ── Locking ──────────────────────────────────────────────────
+
+    def _acquire_lock(self, path: str) -> str:
+        """
+        Acquire an exclusive lockfile. Returns lockfile path.
+        Uses O_CREAT|O_EXCL for atomic creation (works on Windows + POSIX).
+        """
+        lockfile = path + ".lock"
+        deadline = time.time() + LOCK_TIMEOUT
+
+        while True:
+            try:
+                # Atomic create — fails if file exists
+                fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                # Write PID for stale detection
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return lockfile
+            except FileExistsError:
+                # Check if lock is stale
+                try:
+                    lock_age = time.time() - os.path.getmtime(lockfile)
+                    if lock_age > LOCK_STALE_AGE:
+                        # Stale lock — remove and retry
+                        try:
+                            os.remove(lockfile)
+                        except OSError:
+                            pass
+                        continue
+                except OSError:
+                    pass
+
+                if time.time() >= deadline:
+                    # Timeout — force remove stale lock
+                    try:
+                        os.remove(lockfile)
+                    except OSError:
+                        pass
+                    raise TimeoutError(f"Could not acquire lock: {lockfile}")
+
+                time.sleep(LOCK_RETRY_INTERVAL)
+            except OSError:
+                # Parent dir might not exist yet
+                parent = os.path.dirname(lockfile)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+                if time.time() >= deadline:
+                    raise TimeoutError(f"Could not acquire lock: {lockfile}")
+                time.sleep(LOCK_RETRY_INTERVAL)
+
+    def _release_lock(self, lockfile: str) -> None:
+        """Release a lockfile."""
+        try:
+            os.remove(lockfile)
+        except OSError:
+            pass
+
+    def _locked_read_modify_write(self, path: str, layer: str, modify_fn) -> None:
+        """Lock -> reload from disk -> apply modification -> atomic write -> unlock."""
+        lockfile = self._acquire_lock(path)
+        try:
+            existing = self._load_file(path, layer=layer)
+            modified = modify_fn(existing)
+            self._save_file(path, modified)
+        finally:
+            self._release_lock(lockfile)
+
+    def _locked_save(self, path: str, memories: List[Memory]) -> None:
+        """Lock -> atomic write -> unlock."""
+        lockfile = self._acquire_lock(path)
+        try:
+            self._save_file(path, memories)
+        finally:
+            self._release_lock(lockfile)
+
     # ── Internal ────────────────────────────────────────────────
 
     def _load_file(self, path: str, layer: str = "project") -> List[Memory]:
@@ -166,27 +270,53 @@ class MemoryStore:
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
-            memories = [Memory.from_dict(d) for d in data]
+
+            # Parse entries individually — skip malformed, don't discard all
+            memories = []
+            for i, d in enumerate(data):
+                try:
+                    memories.append(Memory.from_dict(d))
+                except (KeyError, TypeError, ValueError) as e:
+                    import sys
+                    print(
+                        f"[rainman] skipping malformed entry #{i} in {path}: {e}",
+                        file=sys.stderr,
+                    )
+                    continue
+
             # Ensure layer is set correctly
             for m in memories:
                 m.layer = layer
             return memories
-        except (json.JSONDecodeError, KeyError, TypeError):
+
+        except json.JSONDecodeError:
+            # Corruption — quarantine the file, don't wipe it
+            self._quarantine_file(path)
             return []
+        except (OSError, IOError):
+            return []
+
+    def _quarantine_file(self, path: str) -> None:
+        """Move a corrupted file to .corrupt-<timestamp> for recovery."""
+        import sys
+        timestamp = int(time.time())
+        quarantine_path = f"{path}.corrupt-{timestamp}"
+        try:
+            os.rename(path, quarantine_path)
+            print(
+                f"[rainman] corrupted file quarantined: {path} -> {quarantine_path}",
+                file=sys.stderr,
+            )
+        except OSError as e:
+            print(
+                f"[rainman] could not quarantine corrupted file {path}: {e}",
+                file=sys.stderr,
+            )
 
     def _save_file(self, path: str, memories: List[Memory]) -> None:
         parent = os.path.dirname(path)
         os.makedirs(parent, exist_ok=True)
         tmp = path + ".tmp"
-        try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump([m.to_dict() for m in memories], f, indent=2)
-            os.replace(tmp, path)
-        except OSError:
-            # If atomic replace fails, try direct write as fallback
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump([m.to_dict() for m in memories], f, indent=2)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump([m.to_dict() for m in memories], f, indent=2)
+        os.replace(tmp, path)

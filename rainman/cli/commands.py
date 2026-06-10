@@ -253,19 +253,17 @@ def cmd_setup() -> None:
 
     # Use "python" (not sys.executable) because Claude Code runs hooks
     # through /usr/bin/bash which strips Windows backslashes from paths.
+    #
+    # SessionStart with empty matcher fires on all sources: startup, resume, compact.
+    # This handles both initial context loading AND post-compaction re-injection.
+    # PostCompact stdout is NOT injected into Claude's context (only SessionStart is),
+    # so compaction recovery must go through SessionStart.
     hooks_config = {
         "SessionStart": [{
             "matcher": "",
             "hooks": [{
                 "type": "command",
                 "command": "python -m rainman.hooks.session_start",
-            }],
-        }],
-        "PostCompact": [{
-            "matcher": "auto",
-            "hooks": [{
-                "type": "command",
-                "command": "python -m rainman.hooks.post_compact",
             }],
         }],
         "PostToolUse": [{

@@ -141,6 +141,7 @@ def main():
         sys.exit(0)
 
     from rainman.core.engine import RainmanEngine
+    from rainman.core.redact import redact_content
 
     engine = RainmanEngine(project_dir=cwd)
 
@@ -148,6 +149,11 @@ def main():
     for content, category in snippets:
         if stored >= MAX_MEMORIES_PER_SESSION:
             break
+
+        # Redact secrets before storing
+        content = redact_content(content)
+        if len(content.replace("[REDACTED]", "").strip()) < 30:
+            continue
 
         # Dedup: check if we already know this
         existing = engine.recall(content, limit=1)

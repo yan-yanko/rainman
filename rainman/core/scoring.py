@@ -70,7 +70,8 @@ def keyword_score(entry: Memory, query_words: List[str]) -> float:
     overlap = matched / len(query_words)
 
     # Rehearsal boost (ACT-R: frequently recalled memories strengthen)
-    rehearsal = 1 + entry.recall_count * 0.1
+    # Capped to prevent rich-get-richer: max 2x at 10+ recalls
+    rehearsal = 1 + min(entry.recall_count, 10) * 0.1
 
     return overlap * rehearsal
 
@@ -89,7 +90,8 @@ def temporal_decay(entry: Memory, now: Optional[float] = None) -> float:
     decay_exp = 0.5  # power-law exponent
 
     # Rehearsal: accessed memories decay slower
-    rehearsal = 1 + entry.recall_count * 0.15
+    # Capped to prevent unbounded amplification: max 2.5x at 10+ recalls
+    rehearsal = 1 + min(entry.recall_count, 10) * 0.15
 
     return rehearsal / (1 + days ** decay_exp)
 
@@ -128,6 +130,7 @@ def associative_score(
     all_entries: List[Memory],
     top_ids: List[str],
     reverse_index: Optional[Dict[str, set]] = None,
+    entry: Optional[Memory] = None,
 ) -> float:
     """
     Graph-based associative boost.
@@ -136,12 +139,12 @@ def associative_score(
     Checks if this entry is linked (via linked_ids) to any top-scoring entry.
     Uses reverse_index when available to avoid O(n) scan.
     """
-    # Find the entry
-    entry = None
-    for e in all_entries:
-        if e.id == entry_id:
-            entry = e
-            break
+    # Use provided entry or fall back to O(n) lookup
+    if entry is None:
+        for e in all_entries:
+            if e.id == entry_id:
+                entry = e
+                break
 
     if entry is None:
         return 0.0
@@ -190,6 +193,7 @@ def compute_score(
         assoc = associative_score(
             entry.id, all_entries, top_ids,
             reverse_index=reverse_index,
+            entry=entry,
         )
 
     total = (
