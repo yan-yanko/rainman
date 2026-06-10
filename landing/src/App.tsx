@@ -597,6 +597,34 @@ export default function App() {
               </div>
             </FadeDown>
           </div>
+
+          {/* "Don't forget" callout */}
+          <FadeDown delay={0.7}>
+            <div className="liquid-glass rounded-xl p-6 border border-white/10 mt-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-lg bg-accent-warm/10 flex items-center justify-center flex-shrink-0 mt-1">
+                  <Brain className="w-5 h-5 text-accent-warm" />
+                </div>
+                <div>
+                  <h3 className="text-[#e8e8ed] font-medium text-lg mb-2">
+                    Want to make sure something is remembered?
+                  </h3>
+                  <p className="text-white/60 text-sm leading-relaxed mb-3">
+                    Just say{' '}
+                    <code className="text-accent bg-accent/10 px-1.5 py-0.5 rounded text-xs">"don't forget"</code>{' '}
+                    or{' '}
+                    <code className="text-accent bg-accent/10 px-1.5 py-0.5 rounded text-xs">"remember this"</code>{' '}
+                    during your conversation. Rainman picks it up automatically at session
+                    end — no commands, no tools, no interruptions. Just talk naturally.
+                  </p>
+                  <div className="bg-black/40 rounded-lg p-3 font-mono text-sm text-white/50">
+                    <p><span className="text-white/30">you:</span> the auth service uses Redis for session tokens, don't forget</p>
+                    <p className="text-accent/60 mt-1">&#10003; Captured automatically when the session ends</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FadeDown>
         </div>
       </section>
 
