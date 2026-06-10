@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 130 tests across 8 files, <3s
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 143 tests across 9 files, <3s
 
 ## Architecture
 

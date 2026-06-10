@@ -16,7 +16,7 @@ import time
 import uuid
 from typing import Dict, List, Optional, Any
 
-from rainman.core.models import Memory, RecallResult
+from rainman.core.models import Memory, RecallResult, CATEGORIES
 from rainman.core.sentiment import classify_sentiment
 from rainman.core.scoring import (
     compute_score,
@@ -25,6 +25,15 @@ from rainman.core.scoring import (
     IMPORTANCE_KEYWORDS,
 )
 from rainman.core.store import MemoryStore
+
+
+# ── Input limits ──────────────────────────────────────────────
+MAX_CONTENT_LENGTH = 5000
+MIN_CONTENT_LENGTH = 5
+MAX_TAG_LENGTH = 50
+MAX_TAGS = 20
+MAX_FILE_REFS = 20
+MAX_FILE_REF_LENGTH = 500
 
 
 # Project-layer boost on recall (local knowledge is more relevant)
@@ -75,9 +84,33 @@ class RainmanEngine:
         source: str = "cli",
         layer: str = "project",
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> Memory:
-        """Add a memory with auto-sentiment and auto-linking."""
+    ) -> Optional[Memory]:
+        """Add a memory with auto-sentiment and auto-linking.
+
+        Returns None if content is too short after stripping.
+        """
         self._ensure_loaded()
+
+        # ── Input validation ──
+        content = content.strip()
+        if len(content) < MIN_CONTENT_LENGTH:
+            return None
+        if len(content) > MAX_CONTENT_LENGTH:
+            content = content[:MAX_CONTENT_LENGTH]
+
+        if category not in CATEGORIES:
+            category = "note"
+
+        if layer not in ("project", "global"):
+            layer = "project"
+
+        # Sanitize tags
+        if tags:
+            tags = [t.strip()[:MAX_TAG_LENGTH] for t in tags[:MAX_TAGS] if t.strip()]
+        # Sanitize file_refs
+        if file_refs:
+            file_refs = [f.strip()[:MAX_FILE_REF_LENGTH] for f in file_refs[:MAX_FILE_REFS] if f.strip()]
+
         ts = time.time()
 
         if sentiment is None:
@@ -173,13 +206,21 @@ class RainmanEngine:
 
         # Update access stats on returned entries
         top_results = results[:limit]
+        updates_by_layer: Dict[str, Dict[str, dict]] = {}
         for r in top_results:
             r.memory.recall_count += 1
             r.memory.last_recalled = now
+            layer = r.memory.layer
+            if layer not in updates_by_layer:
+                updates_by_layer[layer] = {}
+            updates_by_layer[layer][r.memory.id] = {
+                "recall_count": r.memory.recall_count,
+                "last_recalled": r.memory.last_recalled,
+            }
 
-        # Persist only the layers that had recalled memories updated
-        updated_layers = {r.memory.layer for r in top_results}
-        self.store.save_layers(self._memories, updated_layers)
+        # Persist only the stats that changed (locked per-entry update)
+        for layer, updates in updates_by_layer.items():
+            self.store.update_rehearsal_stats(updates, layer)
 
         return top_results
 
@@ -253,6 +294,22 @@ class RainmanEngine:
         self.store.save_all(self._memories)
         return True
 
+    def refresh(self, memory_id: str) -> bool:
+        """Refresh a memory's timestamp without creating a duplicate.
+
+        Used by hooks when dedup fires — keeps the memory fresh instead
+        of silently dropping the update.
+        """
+        self._ensure_loaded()
+        m = self._find_by_id(memory_id)
+        if not m:
+            return False
+        m.timestamp = time.time()
+        m.recall_count += 1
+        m.last_recalled = m.timestamp
+        self.store.save_one(m)
+        return True
+
     def forget(self, memory_id: str) -> bool:
         """Remove a specific memory."""
         self._ensure_loaded()
@@ -320,7 +377,7 @@ class RainmanEngine:
         for m in self._memories:
             days = max(0, (now - m.timestamp) / 86400)
             recency = 1 / (1 + days ** 0.5)
-            score = m.importance * 0.5 + recency * 0.3 + (m.recall_count * 0.1) * 0.2
+            score = m.importance * 0.5 + recency * 0.3 + (min(m.recall_count, 10) * 0.1) * 0.2
             scored.append((m, score))
 
         scored.sort(key=lambda x: x[1])

@@ -94,7 +94,7 @@ def cmd_recall(
             print(f"   tags: {', '.join(m.tags)}")
         if m.file_refs:
             print(f"   files: {', '.join(m.file_refs)}")
-        print(f"   [{m.layer}] recalled {m.recall_count}x | {m.sentiment}")
+        print(f"   [{m.layer}] recalled {m.recall_count}x | {m.sentiment} | source: {m.source or 'unknown'}")
 
 
 def cmd_status() -> None:
@@ -102,7 +102,7 @@ def cmd_status() -> None:
     engine = _get_engine()
     stats = engine.get_stats()
 
-    print(f"Rainman Memory Status")
+    print("Rainman Memory Status")
     print(f"{'=' * 40}")
     print(f"Total memories: {stats['total']}")
     print()
@@ -238,7 +238,7 @@ def cmd_setup() -> None:
                 print(f"   Run manually: claude mcp add rainman -- {python_path} -m rainman serve")
         except (subprocess.TimeoutExpired, FileNotFoundError):
             errors.append("MCP registration")
-            print(f"   Warning: could not run `claude` CLI")
+            print("   Warning: could not run `claude` CLI")
             print(f"   Run manually: claude mcp add rainman -- {python_path} -m rainman serve")
     else:
         errors.append("MCP registration")
@@ -578,7 +578,6 @@ def cmd_doctor() -> None:
 
     # Summary
     print(f"\n{'=' * 50}")
-    total = passed + failed + warnings
     print(f"Results: {passed} passed, {failed} failed, {warnings} warnings")
     if failed == 0:
         print("Rainman is healthy!")

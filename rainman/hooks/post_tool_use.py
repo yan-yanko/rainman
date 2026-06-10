@@ -72,12 +72,12 @@ def main():
 
     engine = RainmanEngine(project_dir=cwd)
 
-    # Dedup: skip if a memory with the same file_refs and source type exists
+    # Dedup: refresh existing memory instead of creating duplicate
     if file_refs:
         existing = engine.links(file_refs[0])
         for m in existing:
             if m.source and m.source.startswith(f"hook:post_tool_use:{tool_name}"):
-                # Already have a memory from the same hook for the same file
+                engine.refresh(m.id)
                 sys.exit(0)
 
     engine.add(
@@ -105,7 +105,7 @@ def _extract_learning(tool_name, tool_input, tool_output):
         if len(output_str) < MIN_CONTENT_LENGTH:
             return None
         # Extract first meaningful line as summary
-        lines = [l.strip() for l in output_str.split("\n") if l.strip() and not l.strip().startswith("#")]
+        lines = [ln.strip() for ln in output_str.split("\n") if ln.strip() and not ln.strip().startswith("#")]
         summary = lines[0][:150] if lines else "file contents"
         return (
             f"File {_short_path(file_path)}: {summary}",

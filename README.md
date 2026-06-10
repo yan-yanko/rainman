@@ -230,9 +230,10 @@ tests/
   test_cli.py         CLI smoke tests
   test_ingest.py      Ingest tests
   test_regressions.py Regression tests
+  test_concurrency.py Concurrency, corruption, input validation tests
 ```
 
-130 unit tests. Zero external dependencies. <3s test suite.
+143 unit tests. Zero external dependencies. <3s test suite.
 
 ## CLI Reference
 

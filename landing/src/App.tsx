@@ -225,7 +225,7 @@ export default function App() {
         {/* Bottom badges */}
         <FadeDown delay={1.2}>
           <div className="flex items-center justify-center gap-4 md:gap-8 py-8 md:py-12 text-[10px] md:text-xs text-white/50 uppercase tracking-wider">
-            <span>130 tests</span>
+            <span>143 tests</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>0 dependencies</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />

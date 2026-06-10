@@ -103,6 +103,8 @@ def _handle_compaction(engine, hook_input):
                 line = f"  {i}. [{m.category}] {m.content[:150]}"
                 if m.file_refs:
                     line += f"\n     files: {', '.join(m.file_refs)}"
+                if m.source:
+                    line += f"\n     source: {m.source}"
                 lines.append(line)
             lines.append("")
 
@@ -116,6 +118,8 @@ def _handle_compaction(engine, hook_input):
             line = f"  {i}. [{m.category}] {m.content[:150]}"
             if m.file_refs:
                 line += f"\n     files: {', '.join(m.file_refs)}"
+            if m.source:
+                line += f"\n     source: {m.source}"
             lines.append(line)
 
     lines.append(

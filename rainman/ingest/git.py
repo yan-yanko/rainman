@@ -10,7 +10,6 @@ Usage:
     rainman ingest --git --limit 50
 """
 
-import os
 import re
 import subprocess
 from typing import List, Tuple

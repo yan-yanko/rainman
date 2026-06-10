@@ -198,9 +198,11 @@ class RainmanMCPServer:
             if name == "recall":
                 if "query" not in args or not args["query"]:
                     return self._tool_error("recall requires 'query' argument")
+                query = str(args["query"])[:500]
+                limit = max(1, min(50, int(args.get("limit", 5))))
                 results = self.engine.recall(
-                    query=args["query"],
-                    limit=args.get("limit", 5),
+                    query=query,
+                    limit=limit,
                     category=args.get("category"),
                 )
                 text = self._format_recall(results)
@@ -254,7 +256,7 @@ class RainmanMCPServer:
         for i, r in enumerate(results, 1):
             m = r.memory
             lines.append(f"{i}. [{m.category}] {m.content}")
-            lines.append(f"   score={r.total_score:.3f} layer={m.layer}")
+            lines.append(f"   score={r.total_score:.3f} layer={m.layer} source={m.source}")
             if m.file_refs:
                 lines.append(f"   files: {', '.join(m.file_refs)}")
             if m.tags:

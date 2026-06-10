@@ -159,9 +159,10 @@ def main():
         if len(content.replace("[REDACTED]", "").strip()) < 30:
             continue
 
-        # Dedup: check if we already know this
+        # Dedup: refresh existing memory instead of creating duplicate
         existing = engine.recall(content, limit=1)
         if existing and existing[0].total_score > DEDUP_SCORE_THRESHOLD:
+            engine.refresh(existing[0].memory.id)
             continue
 
         engine.add(
