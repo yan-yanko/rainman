@@ -189,6 +189,29 @@ New memories automatically link to existing ones when keyword overlap exceeds 25
 
 Every memory gets automatic sentiment classification using keyword matching (zero LLM). Six categories: positive, negative, neutral, anxious, frustrated, excited. Developer-specific terms included (regression, workaround, hack = frustrated; deployed, shipped, works = positive).
 
+### Input Validation
+
+All inputs are validated before storage:
+- **Content**: Stripped, rejected if < 5 chars, truncated at 5,000 chars
+- **Category**: Must be one of the 6 valid categories, falls back to `note`
+- **Tags**: Max 20 tags, each max 50 chars
+- **File refs**: Max 20 refs, each max 500 chars
+- **MCP queries**: Clamped to 500 chars, limit clamped to 1-50
+
+### Smart Dedup
+
+When hooks detect a near-duplicate memory (score > 0.8), they don't create a new entry and don't silently skip it — they **refresh the existing memory's timestamp**. This keeps knowledge fresh without duplicating it. Memories that get re-encountered stay relevant in scoring instead of going stale.
+
+### Source Provenance
+
+Every recall result shows where the memory came from:
+```
+1. [solution] Fixed OOM on Railway — use semaphore(2)
+   score=0.847 layer=project source=hook:session_end
+```
+
+Sources include: `cli`, `mcp`, `hook:session_end`, `hook:post_tool_use:Read`, `hook:post_tool_use:Bash`, `git:<hash>`, `ingest:files`.
+
 ### Secret Redaction
 
 Auto-learn hooks (PostToolUse, SessionEnd) automatically redact sensitive content before storing:
@@ -233,7 +256,7 @@ tests/
   test_concurrency.py Concurrency, corruption, input validation tests
 ```
 
-143 unit tests. Zero external dependencies. <3s test suite.
+143 unit tests. Zero external dependencies. <3s test suite. CI runs `ruff check` + `pytest` on Python 3.10/3.11/3.12.
 
 ## CLI Reference
 

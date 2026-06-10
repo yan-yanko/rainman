@@ -598,6 +598,46 @@ export default function App() {
             </FadeDown>
           </div>
 
+          {/* Safety features */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <FadeDown delay={0.7}>
+              <div className="liquid-glass rounded-xl p-6 h-full">
+                <h3 className="text-[#e8e8ed] font-medium mb-2">
+                  Smart Dedup
+                </h3>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  Near-duplicate memories don't pile up. When a hook encounters
+                  knowledge that already exists, it refreshes the timestamp instead
+                  of creating a copy. Memories stay fresh without bloating.
+                </p>
+              </div>
+            </FadeDown>
+            <FadeDown delay={0.8}>
+              <div className="liquid-glass rounded-xl p-6 h-full">
+                <h3 className="text-[#e8e8ed] font-medium mb-2">
+                  Source Provenance
+                </h3>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  Every recalled memory shows where it came from — CLI, MCP,
+                  git history, auto-learn hooks, or session capture. You always
+                  know the origin of each piece of knowledge.
+                </p>
+              </div>
+            </FadeDown>
+            <FadeDown delay={0.9}>
+              <div className="liquid-glass rounded-xl p-6 h-full">
+                <h3 className="text-[#e8e8ed] font-medium mb-2">
+                  Input Validation
+                </h3>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  All inputs are validated before storage — content length, category,
+                  tags, file refs. Invalid categories fall back gracefully. No
+                  garbage enters the memory store.
+                </p>
+              </div>
+            </FadeDown>
+          </div>
+
           {/* "Don't forget" callout */}
           <FadeDown delay={0.7}>
             <div className="liquid-glass rounded-xl p-6 border border-white/10 mt-6">
@@ -865,6 +905,10 @@ export default function App() {
               {
                 q: 'Can multiple processes write simultaneously?',
                 a: "Yes. Hooks and the MCP server can run in parallel safely. All writes use file locking with reload-before-write to prevent data loss. Corrupted files are quarantined (not wiped) for recovery.",
+              },
+              {
+                q: 'How well tested is it?',
+                a: "143 unit tests across 9 test files, including concurrency, corruption recovery, and input validation tests. CI runs ruff linting + pytest on Python 3.10, 3.11, and 3.12 on every push. Zero external dependencies means zero supply chain risk.",
               },
             ].map((item, i) => (
               <FadeDown key={i} delay={0.1 + i * 0.05}>
