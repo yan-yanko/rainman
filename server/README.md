@@ -46,7 +46,11 @@ paste the token to list users, mint/revoke tokens, and view the audit trail.
 | `GET /v1/health` | liveness |
 | `GET /v1/workspaces/{ws}/pull?since=N` | reader+ — changes (upserts + tombstones) with `seq > N`, plus new `cursor` |
 | `POST /v1/workspaces/{ws}/push` | contributor+ — body `{memories:[...], deletions:[ids]}`; assigns seqs, stamps `author` |
-| `GET /v1/admin/users` · `POST /v1/admin/tokens` · `POST /v1/admin/revoke` · `GET /v1/admin/audit` | admin only |
+| `GET /v1/admin/users` · `POST /v1/admin/tokens` · `POST /v1/admin/revoke` · `GET /v1/admin/audit` · `GET /v1/admin/audit/verify` | admin only |
+
+Bearer tokens are stored as SHA-256 digests (never cleartext at rest). The
+audit log is hash-chained; `GET /v1/admin/audit/verify` returns `{ok, broken_at}`
+so tampering with or deleting any past row is detectable.
 
 All authenticated requests require `Authorization: Bearer <token>`; the token is
 scoped to a single workspace. Conflicts resolve last-write-to-server-wins by

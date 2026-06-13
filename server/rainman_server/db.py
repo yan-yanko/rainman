@@ -55,10 +55,31 @@ CREATE TABLE IF NOT EXISTS audit (
     workspace TEXT NOT NULL,
     actor     TEXT NOT NULL,
     action    TEXT NOT NULL,
-    detail    TEXT
+    detail    TEXT,
+    row_hash  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ws ON audit(workspace, id);
 """
+
+
+def token_digest(token: str) -> str:
+    """SHA-256 of a bearer token. Tokens are stored/looked up by digest only,
+    never in cleartext, so a leaked DB file cannot be used to impersonate users.
+    SHA-256 (not a slow KDF) is correct here: tokens are 192-bit random secrets,
+    so there is no low-entropy value to brute-force and lookups stay indexed."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _is_sha256_hex(s: str) -> bool:
+    return len(s) == 64 and all(c in "0123456789abcdef" for c in s)
+
+
+def _audit_row_hash(prev: str, ts: float, workspace: str, actor: str,
+                    action: str, detail: str) -> str:
+    """Tamper-evident chain link: hash of the previous link + this row's fields.
+    Altering or deleting any past row breaks every subsequent hash."""
+    payload = f"{prev}|{ts!r}|{workspace}|{actor}|{action}|{detail}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 # Fields excluded from the content hash: volatile per-client rehearsal stats
 # shouldn't count as a "change" that forces a re-sync.
@@ -97,11 +118,32 @@ class ServerDB:
     def _migrate(conn) -> None:
         # Old token DBs (pre-RBAC) lack the role column — add it, defaulting to
         # contributor (the pre-RBAC behavior: any valid token could push+pull).
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(tokens)")}
-        if "role" not in cols:
+        token_cols = {row[1] for row in conn.execute("PRAGMA table_info(tokens)")}
+        if "role" not in token_cols:
             conn.execute(
                 "ALTER TABLE tokens ADD COLUMN role TEXT NOT NULL DEFAULT 'contributor'"
             )
+
+        # Pre-hashing DBs stored raw tokens — hash them in place (idempotent:
+        # already-hashed 64-hex values are left alone). After this, no cleartext
+        # token is ever at rest and previously-issued tokens keep working.
+        for (tok,) in conn.execute("SELECT token FROM tokens").fetchall():
+            if not _is_sha256_hex(tok):
+                conn.execute("UPDATE tokens SET token = ? WHERE token = ?",
+                             (token_digest(tok), tok))
+
+        # Tamper-evidence: add row_hash and backfill the chain for any existing
+        # audit rows so verification covers the whole history.
+        audit_cols = {row[1] for row in conn.execute("PRAGMA table_info(audit)")}
+        if "row_hash" not in audit_cols:
+            conn.execute("ALTER TABLE audit ADD COLUMN row_hash TEXT")
+        if conn.execute("SELECT COUNT(*) FROM audit WHERE row_hash IS NULL").fetchone()[0]:
+            prev = ""
+            for rid, ts, ws, actor, action, detail in conn.execute(
+                "SELECT id, ts, workspace, actor, action, detail FROM audit ORDER BY id"
+            ).fetchall():
+                prev = _audit_row_hash(prev, ts, ws, actor, action, detail or "")
+                conn.execute("UPDATE audit SET row_hash = ? WHERE id = ?", (prev, rid))
 
     @staticmethod
     def _next_seq(conn) -> int:
@@ -120,7 +162,7 @@ class ServerDB:
                 conn.execute(
                     "INSERT OR REPLACE INTO tokens (token, username, workspace, role) "
                     "VALUES (?, ?, ?, ?)",
-                    (token, username, workspace, role),
+                    (token_digest(token), username, workspace, role),
                 )
         finally:
             conn.close()
@@ -138,7 +180,8 @@ class ServerDB:
         conn = self._connect()
         try:
             row = conn.execute(
-                "SELECT username, workspace, role FROM tokens WHERE token = ?", (token,)
+                "SELECT username, workspace, role FROM tokens WHERE token = ?",
+                (token_digest(token),),
             ).fetchone()
             return (row[0], row[1], row[2]) if row else None
         finally:
@@ -175,16 +218,44 @@ class ServerDB:
     # ── Audit ────────────────────────────────────────────────────
 
     def log_audit(self, workspace: str, actor: str, action: str, detail: str = "") -> None:
+        ts = time.time()
         conn = self._connect()
         try:
-            with conn:
-                conn.execute(
-                    "INSERT INTO audit (ts, workspace, actor, action, detail) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (time.time(), workspace, actor, action, detail),
-                )
+            # BEGIN IMMEDIATE takes the write lock before we read the previous
+            # link, so concurrent request threads can't fork the hash chain.
+            conn.execute("BEGIN IMMEDIATE")
+            prev = conn.execute(
+                "SELECT row_hash FROM audit ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            prev_hash = prev[0] if prev and prev[0] else ""
+            row_hash = _audit_row_hash(prev_hash, ts, workspace, actor, action, detail)
+            conn.execute(
+                "INSERT INTO audit (ts, workspace, actor, action, detail, row_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (ts, workspace, actor, action, detail, row_hash),
+            )
+            conn.commit()
         finally:
             conn.close()
+
+    def verify_audit(self) -> dict:
+        """Recompute the hash chain over the whole audit log. Returns
+        {ok, broken_at} — broken_at is the id of the first tampered/missing row."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT id, ts, workspace, actor, action, detail, row_hash "
+                "FROM audit ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+        prev = ""
+        for rid, ts, ws, actor, action, detail, stored in rows:
+            expected = _audit_row_hash(prev, ts, ws, actor, action, detail or "")
+            if stored != expected:
+                return {"ok": False, "broken_at": rid, "count": len(rows)}
+            prev = expected
+        return {"ok": True, "broken_at": None, "count": len(rows)}
 
     def get_audit(self, workspace: str, limit: int = 100) -> List[dict]:
         conn = self._connect()

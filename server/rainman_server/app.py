@@ -119,6 +119,8 @@ def make_handler(db: ServerDB):
                     except ValueError:
                         limit = 100
                     return self._send_json(200, {"events": db.get_audit(ws, limit)})
+                if parts[2:] == ["audit", "verify"]:
+                    return self._send_json(200, db.verify_audit())
 
             return self._send_json(404, {"error": "not found"})
 

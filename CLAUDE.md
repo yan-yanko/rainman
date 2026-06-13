@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 215 tests across 17 files
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 223 tests across 18 files
 
 ## Architecture
 
@@ -74,6 +74,7 @@ tests/                  (181 tests total, all marked `unit`)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync.py        end-to-end sync over HTTP: push/pull/tombstone/auth (Ph2b)
   test_rbac.py        role enforcement, admin API, audit, token migration (Ph3)
+  test_hardening.py   token hashing at rest + audit hash-chain tamper-evidence
   conftest.py         adds server/ to sys.path for sync tests
 ```
 
@@ -158,6 +159,13 @@ RBAC (Phase 3): roles `reader` (pull) < `contributor` (pull+push) < `admin`
 (push/pull/token/revoke) in the server DB. Deploy: `server/DEPLOY.md` (Docker +
 air-gapped); compliance: `SOC2_READINESS.md`. SSO/SAML/SCIM deferred pending a
 target IdP; server stays stdlib-only until then.
+
+Server hardening: bearer tokens are stored/looked up as SHA-256 digests only
+(`token_digest`) — never cleartext at rest; raw tokens migrate in place. The
+audit log is hash-chained (`row_hash = sha256(prev | fields)`); `verify_audit`
+/ `GET /v1/admin/audit/verify` detects any altered or deleted row. Encryption
+of memory content at rest still relies on host FDE (needs a crypto dep, gated
+by the stdlib-only rule).
 
 Syncs the **project layer only** (global is personal). Monotonic-cursor delta
 protocol with tombstones; last-write-to-server-wins by `seq`. Bearer token per

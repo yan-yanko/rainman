@@ -21,7 +21,8 @@ controls (personnel, vendor management, physical security) out of scope here.
 | Workspace isolation | ✅ | Tokens are scoped to one workspace; cross-workspace access is rejected (403) |
 | Deprovisioning | ✅ | `revoke` removes all of a user's tokens immediately (admin console / `/v1/admin/revoke`) |
 | Secrets not stored in source control | ✅ | Client token kept in `~/.rainman/sync_credentials.json` or env, never the committable `.rainman/` |
-| MFA / SSO | ⛔ Gap | Deferred (Phase 3 SSO/SAML/SCIM). Today: pre-shared tokens. Compensating: short-lived rotated tokens behind VPN. |
+| Bearer tokens hashed at rest | ✅ | Server stores/looks up only SHA-256 token digests (`token_digest`); a leaked DB cannot be used to impersonate users. Raw token never persisted. |
+| MFA / SSO | ⛔ Gap | Deferred (SSO/SAML/SCIM). Today: pre-shared tokens. Compensating: short-lived rotated tokens behind VPN. |
 
 ### CC7 — System Operations / Monitoring
 
@@ -29,7 +30,7 @@ controls (personnel, vendor management, physical security) out of scope here.
 |---|---|---|
 | Centralized, append-only audit trail | ✅ | Server logs push / pull / token_create / revoke with actor + timestamp (`db.audit`, viewable in console) |
 | Client-side action audit | ✅ | Opt-in append-only JSONL of store/recall/forget (`rainman/core/audit.py`) |
-| Tamper-evidence of the audit log | ⚠️ Partial | Append-only by construction; no cryptographic chaining yet (potential enhancement) |
+| Tamper-evidence of the audit log | ✅ | Hash-chained: each row carries `sha256(prev_hash | fields)`; `verify_audit` (and `GET /v1/admin/audit/verify`) detects any altered or deleted row |
 
 ### CC8 — Change Management
 
@@ -47,16 +48,17 @@ controls (personnel, vendor management, physical security) out of scope here.
 | Secret redaction before storage | ✅ | `rainman/core/redact.py` (+ org-policy mandatory patterns/denylists) |
 | Memory-poisoning controls | ✅ | Trust gating + quarantine + provenance (`THREAT_MODEL.md`) |
 | Encryption in transit | ✅ (deployment) | TLS terminated at a reverse proxy (`server/DEPLOY.md`) |
-| Encryption at rest | ⛔ Gap | SQLite DB is unencrypted; rely on full-disk / filesystem encryption on the host. SQLCipher is a future option. |
+| Encryption at rest | ⛔ Gap | SQLite DB is unencrypted (bearer tokens are hashed, but synced memory content is not). Rely on full-disk / filesystem encryption on the host. App-level encryption needs a crypto dependency (SQLCipher), which the stdlib-only server defers. |
 | Org-managed policy / retention | ✅ | Policy control plane: retention TTL, non-overridable `enforce` mandates (`rainman/core/config.py`) |
 
 ## Gaps to a real SOC 2 (work to close)
 
-1. **SSO / MFA** — replace pre-shared tokens with OIDC/SAML + SCIM provisioning (Phase 3, deferred pending a target IdP).
-2. **Encryption at rest** — host-level disk encryption today; evaluate SQLCipher for the server DB.
-3. **Audit tamper-evidence** — optional hash-chaining of audit rows.
-4. **Organizational controls** — access reviews, incident response runbook, vendor management, security training — required for the audit regardless of code.
-5. **Formal policies** — data retention, access control, and change management policies documented and approved.
+1. **SSO / MFA** — replace pre-shared tokens with OIDC/SAML + SCIM provisioning (deferred pending a target IdP; this is also where the server takes its first dependency).
+2. **Encryption at rest** — host-level disk encryption today; app-level (SQLCipher) deferred with the stdlib-only constraint. Note bearer tokens are already hashed at rest regardless.
+3. **Organizational controls** — access reviews, incident response runbook, vendor management, security training — required for the audit regardless of code.
+4. **Formal policies** — data retention, access control, and change management policies documented and approved.
+
+*Closed since first draft:* bearer-token-at-rest (now SHA-256 hashed) and audit-log tamper-evidence (now hash-chained).
 
 ## Summary for a security reviewer
 
