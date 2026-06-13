@@ -80,3 +80,5 @@ without stopping the server.
 - [ ] Rotate tokens periodically (`token add` re-issues; revoke via the console).
 - [ ] Back up the SQLite file; consider full-disk / filesystem encryption for
       encryption-at-rest (the DB itself is not encrypted — see SOC2_READINESS).
+- [ ] Tune `RAINMAN_MAX_BODY_BYTES` (default 10 MiB) to your largest expected
+      push; the server rejects larger request bodies with 413 before reading them.

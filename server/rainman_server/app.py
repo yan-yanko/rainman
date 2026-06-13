@@ -20,11 +20,23 @@ Zero external dependencies.
 """
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from rainman_server.db import ServerDB, ROLE_RANK, ROLE_READER, ROLE_CONTRIBUTOR, ROLE_ADMIN
 from rainman_server.console import CONSOLE_HTML
+
+# Reject oversized request bodies before reading them into memory (a network
+# service must never read an attacker-controlled Content-Length unbounded).
+# Override with RAINMAN_MAX_BODY_BYTES.
+try:
+    MAX_BODY_BYTES = int(os.environ.get("RAINMAN_MAX_BODY_BYTES", 10 * 1024 * 1024))
+except ValueError:
+    MAX_BODY_BYTES = 10 * 1024 * 1024
+
+# Cap items per push so a single request can't enqueue an unbounded batch.
+MAX_ITEMS_PER_PUSH = 2000
 
 
 def make_handler(db: ServerDB):
@@ -129,6 +141,14 @@ def make_handler(db: ServerDB):
             parsed = urlparse(self.path)
             parts = self._parts(parsed.path)
 
+            # Reject oversized bodies up front, before reading them into memory.
+            try:
+                declared = int(self.headers.get("Content-Length", 0) or 0)
+            except ValueError:
+                declared = 0
+            if declared > MAX_BODY_BYTES:
+                return self._send_json(413, {"error": "payload too large"})
+
             # /v1/workspaces/{ws}/push
             if len(parts) == 4 and parts[:2] == ["v1", "workspaces"] and parts[3] == "push":
                 ws = parts[2]
@@ -136,8 +156,16 @@ def make_handler(db: ServerDB):
                 if not p:
                     return
                 body = self._body()
-                result = db.push(ws, body.get("memories", []), body.get("deletions", []),
-                                 author=p[0])
+                memories = body.get("memories", [])
+                deletions = body.get("deletions", [])
+                # Don't trust the client's payload shape.
+                if not isinstance(memories, list) or not isinstance(deletions, list):
+                    return self._send_json(400, {"error": "memories and deletions must be lists"})
+                if not all(isinstance(m, dict) for m in memories):
+                    return self._send_json(400, {"error": "each memory must be an object"})
+                if len(memories) + len(deletions) > MAX_ITEMS_PER_PUSH:
+                    return self._send_json(413, {"error": f"too many items (max {MAX_ITEMS_PER_PUSH})"})
+                result = db.push(ws, memories, deletions, author=p[0])
                 db.log_audit(ws, p[0], "push", f"accepted={result['accepted']}")
                 return self._send_json(200, result)
 

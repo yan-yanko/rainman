@@ -9,6 +9,7 @@ audit log (hash-chained, tampering detected).
 import sqlite3
 import threading
 import urllib.request
+import urllib.error
 import json
 
 import pytest
@@ -98,6 +99,57 @@ class TestAuditTamperEvidence:
         conn.execute("DELETE FROM audit WHERE id = ?", (ids[1],))
         conn.commit(); conn.close()
         assert db.verify_audit()["ok"] is False
+
+
+@pytest.mark.unit
+class TestRequestHardening:
+    @pytest.fixture
+    def running(self, tmp_path):
+        httpd, db = make_server("127.0.0.1", 0, str(tmp_path / "s.db"))
+        db.add_token("c-tok", "carl", WS, role="contributor")
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        try:
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            httpd.shutdown()
+            t.join(timeout=5)
+
+    def _push(self, url, raw_body: bytes):
+        req = urllib.request.Request(
+            f"{url}/v1/workspaces/{WS}/push", data=raw_body, method="POST",
+            headers={"Authorization": "Bearer c-tok", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
+
+    def test_oversized_body_rejected(self, running, monkeypatch):
+        import rainman_server.app as app
+        monkeypatch.setattr(app, "MAX_BODY_BYTES", 50)
+        body = json.dumps({"memories": [{"id": "x" * 200}]}).encode()
+        assert len(body) > 50
+        assert self._push(running, body) == 413
+
+    def test_malformed_shape_rejected(self, running):
+        assert self._push(running, json.dumps({"memories": "nope"}).encode()) == 400
+
+    def test_non_dict_memory_rejected(self, running):
+        assert self._push(running, json.dumps({"memories": ["just a string"]}).encode()) == 400
+
+    def test_too_many_items_rejected(self, running, monkeypatch):
+        import rainman_server.app as app
+        monkeypatch.setattr(app, "MAX_ITEMS_PER_PUSH", 3)
+        body = json.dumps({"memories": [{"id": f"m{i}"} for i in range(5)]}).encode()
+        assert self._push(running, body) == 413
+
+    def test_valid_push_still_ok(self, running):
+        body = json.dumps({"memories": [{"id": "m1", "content": "ok", "timestamp": 1.0,
+                                         "importance": 0.5}]}).encode()
+        assert self._push(running, body) == 200
 
 
 @pytest.mark.unit
