@@ -62,6 +62,23 @@ tokens only). MFA is handled by your IdP.
 Air-gapped note: use `RAINMAN_OIDC_PUBLIC_KEY` to pin the IdP signing key so the
 server never needs to fetch a JWKS over the network.
 
+## Encryption at rest — optional
+
+Set `RAINMAN_DB_KEY` (a 32-byte key, hex or base64) to AES-256-GCM encrypt the
+synced **memory content** column at rest. Generate one:
+
+```bash
+python -m rainman_server genkey   # prints a 64-char hex key
+export RAINMAN_DB_KEY=<that key>
+```
+
+Unset = content stored as plaintext JSON (host full-disk encryption only).
+Rows written before the key was set still read fine (mixed plaintext/encrypted
+is supported); reading an encrypted row *without* the key fails closed. Keep the
+key out of the DB host's backups, and store it in your secrets manager — losing
+it makes encrypted content unrecoverable. Metadata (ids, timestamps) and the
+audit log remain plaintext; rely on host FDE for those.
+
 ## TLS
 
 The server speaks **plain HTTP** and is designed to sit behind a TLS-terminating
@@ -98,7 +115,8 @@ without stopping the server.
 - [ ] Run as a non-root user; mount the data volume with least privilege.
 - [ ] Restrict inbound to the developer network / VPN.
 - [ ] Rotate tokens periodically (`token add` re-issues; revoke via the console).
-- [ ] Back up the SQLite file; consider full-disk / filesystem encryption for
-      encryption-at-rest (the DB itself is not encrypted — see SOC2_READINESS).
+- [ ] Set `RAINMAN_DB_KEY` to encrypt memory content at rest; store the key in
+      a secrets manager (losing it loses encrypted content). Host full-disk
+      encryption still recommended for metadata + the audit log.
 - [ ] Tune `RAINMAN_MAX_BODY_BYTES` (default 10 MiB) to your largest expected
       push; the server rejects larger request bodies with 413 before reading them.

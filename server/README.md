@@ -72,6 +72,13 @@ export RAINMAN_OIDC_ROLE_CLAIM=groups RAINMAN_OIDC_ROLE_MAP='{"rainman-admins":"
 Static tokens remain for CI/bots/service accounts. SCIM auto-provisioning is
 not yet implemented (users are mapped from claims at login).
 
+## Encryption at rest (optional)
+
+Set `RAINMAN_DB_KEY` (32-byte hex/base64; `python -m rainman_server genkey`) to
+AES-256-GCM encrypt synced memory content at rest. Unset = plaintext (host FDE
+only). Mixed plaintext/encrypted rows are supported; reading encrypted content
+without the key fails closed. See `DEPLOY.md` for key-management guidance.
+
 All authenticated requests require `Authorization: Bearer <token>`; the token is
 scoped to a single workspace. Conflicts resolve last-write-to-server-wins by
 `seq`; the client's local audit log preserves history.

@@ -28,6 +28,8 @@ def main():
 
     p_token = sub.add_parser("token", help="Token administration")
     token_sub = p_token.add_subparsers(dest="token_command")
+    sub.add_parser("genkey", help="Generate a 32-byte encryption-at-rest key (RAINMAN_DB_KEY)")
+
     p_token_add = token_sub.add_parser("add", help="Mint a per-seat token")
     p_token_add.add_argument("--user", required=True)
     p_token_add.add_argument("--workspace", required=True)
@@ -46,6 +48,9 @@ def main():
         except KeyboardInterrupt:
             print("\nShutting down.")
             httpd.shutdown()
+    elif args.command == "genkey":
+        from rainman_server.crypto import generate_key
+        print(generate_key())
     elif args.command == "token" and args.token_command == "add":
         db = ServerDB(args.db)
         token = args.token or secrets.token_hex(24)

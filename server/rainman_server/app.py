@@ -48,9 +48,14 @@ def make_handler(db: ServerDB, oidc=None):
             self._send(code, "application/json", json.dumps(obj).encode("utf-8"))
 
         def _send(self, code: int, ctype: str, body: bytes) -> None:
+            # Close each connection after responding. Our request pattern is
+            # occasional (sync/admin calls), so keep-alive buys little and its
+            # idle-socket handling races with ThreadingHTTPServer teardown.
+            self.close_connection = True
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
 

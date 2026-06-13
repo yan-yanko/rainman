@@ -21,6 +21,8 @@ import secrets
 import time
 from typing import List, Optional, Tuple
 
+from rainman_server.crypto import seal, unseal
+
 # Role hierarchy. Higher rank == more capability.
 ROLE_READER = "reader"
 ROLE_CONTRIBUTOR = "contributor"
@@ -289,7 +291,7 @@ class ServerDB:
             cursor = max(cursor, seq)
             changes.append({
                 "id": mid,
-                "data": None if deleted else json.loads(data),
+                "data": None if deleted else json.loads(unseal(data)),
                 "deleted": bool(deleted),
                 "seq": seq,
             })
@@ -319,7 +321,7 @@ class ServerDB:
                         "INSERT OR REPLACE INTO items "
                         "(workspace, id, data, content_hash, deleted, seq) "
                         "VALUES (?, ?, ?, ?, 0, ?)",
-                        (workspace, mid, json.dumps(data, ensure_ascii=False), h, seq),
+                        (workspace, mid, seal(json.dumps(data, ensure_ascii=False)), h, seq),
                     )
                     seqs[mid] = seq
 

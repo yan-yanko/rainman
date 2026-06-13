@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pip install ./server && pytest tests/ -m unit` — 238 tests across 19 files. (`./server` brings PyJWT[crypto] for the sync/SSO tests; without it those import-skip/fail.)
+**Tests:** `pip install -e . && pip install ./server && pytest tests/ -m unit` — 246 tests across 20 files. (`./server` brings PyJWT[crypto]/cryptography for the sync/SSO/encryption tests; without it those import-skip/fail.)
 
 ## Architecture
 
@@ -53,7 +53,8 @@ server/             SEPARATE package (rainman-server) — self-hosted sync serve
     app.py          ThreadingHTTPServer: sync (pull/push) + admin API, RBAC-enforced, audited
     console.py      Minimal admin web console (HTML+vanilla JS) served at /admin
     oidc.py         OIDC SSO: RS256 JWT validation (PyJWT) + claim->RBAC mapping
-    __main__.py     `rainman_server serve` + `token add --role`
+    crypto.py       AES-256-GCM encryption-at-rest for memory content (RAINMAN_DB_KEY)
+    __main__.py     `rainman_server serve` + `token add --role` + `genkey`
   Dockerfile        Container image (stdlib, no pip step)
   DEPLOY.md         Production + air-gapped deploy runbook
 SOC2_READINESS.md   Control mapping to SOC 2 Trust Services Criteria + gap list
@@ -77,6 +78,7 @@ tests/                  (181 tests total, all marked `unit`)
   test_rbac.py        role enforcement, admin API, audit, token migration (Ph3)
   test_hardening.py   token hashing at rest + audit hash-chain tamper-evidence
   test_oidc.py        OIDC SSO: claim->role mapping, rejection cases, static coexistence
+  test_encryption.py  AES-GCM content-at-rest: sealed on disk, round-trip, fail-closed
   conftest.py         adds server/ to sys.path for sync tests
 ```
 
@@ -172,9 +174,13 @@ login). Server deps now: `cryptography`, `PyJWT[crypto]`.
 Server hardening: bearer tokens are stored/looked up as SHA-256 digests only
 (`token_digest`) — never cleartext at rest; raw tokens migrate in place. The
 audit log is hash-chained (`row_hash = sha256(prev | fields)`); `verify_audit`
-/ `GET /v1/admin/audit/verify` detects any altered or deleted row. Encryption
-of memory content at rest still relies on host FDE (needs a crypto dep, gated
-by the stdlib-only rule).
+/ `GET /v1/admin/audit/verify` detects any altered or deleted row.
+
+Encryption at rest: memory content (`items.data`) is AES-256-GCM encrypted when
+`RAINMAN_DB_KEY` is set (`crypto.py`; `genkey` to mint); off = plaintext, mixed
+rows supported, reads fail closed without the key. Metadata + audit stay
+plaintext (host FDE). The server closes connections per response (no keep-alive)
+so ThreadingHTTPServer behaves deterministically under concurrent test load.
 
 Syncs the **project layer only** (global is personal). Monotonic-cursor delta
 protocol with tombstones; last-write-to-server-wins by `seq`. Bearer token per

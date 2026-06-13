@@ -49,24 +49,25 @@ controls (personnel, vendor management, physical security) out of scope here.
 | Secret redaction before storage | ✅ | `rainman/core/redact.py` (+ org-policy mandatory patterns/denylists) |
 | Memory-poisoning controls | ✅ | Trust gating + quarantine + provenance (`THREAT_MODEL.md`) |
 | Encryption in transit | ✅ (deployment) | TLS terminated at a reverse proxy (`server/DEPLOY.md`) |
-| Encryption at rest | ⛔ Gap | SQLite DB is unencrypted (bearer tokens are hashed, but synced memory content is not). Rely on full-disk / filesystem encryption on the host. App-level encryption needs a crypto dependency (SQLCipher), which the stdlib-only server defers. |
+| Encryption at rest | ✅ (content) / ⚠️ (metadata) | Synced memory content (`items.data`) is AES-256-GCM encrypted at rest when `RAINMAN_DB_KEY` is set (`server/rainman_server/crypto.py`); bearer tokens are hashed. Metadata/index columns + audit log remain plaintext — rely on host full-disk encryption for those. |
 | Org-managed policy / retention | ✅ | Policy control plane: retention TTL, non-overridable `enforce` mandates (`rainman/core/config.py`) |
 
 ## Gaps to a real SOC 2 (work to close)
 
 1. **SCIM provisioning** — OIDC SSO + IdP-delegated MFA are now supported (any RS256 IdP); automated user/group provisioning + deprovisioning (SCIM) is still manual via the admin console.
-2. **Encryption at rest** — host-level disk encryption today; app-level (SQLCipher / AES-GCM on the content column) is the next server-dep item now that the stdlib-only constraint is lifted for the server. Bearer tokens are already hashed at rest regardless.
+2. **Encryption at rest (metadata)** — memory *content* is now AES-256-GCM encrypted and tokens are hashed; workspace/id/timestamp metadata and the audit log are still plaintext, covered by host full-disk encryption. Full-DB encryption (SQLCipher) remains optional future work.
 3. **Organizational controls** — access reviews, incident response runbook, vendor management, security training — required for the audit regardless of code.
 4. **Formal policies** — data retention, access control, and change management policies documented and approved.
 
-*Closed since first draft:* bearer-token-at-rest (SHA-256 hashed), audit-log tamper-evidence (hash-chained), and SSO/MFA (OIDC, IdP-delegated MFA).
+*Closed since first draft:* bearer-token-at-rest (SHA-256 hashed), audit-log tamper-evidence (hash-chained), SSO/MFA (OIDC, IdP-delegated MFA), and memory-content encryption-at-rest (AES-256-GCM).
 
 ## Summary for a security reviewer
 
 The product's architecture is **privacy- and access-control-first**: self-hosted,
 zero egress, per-seat RBAC + OIDC SSO (IdP-delegated MFA), workspace isolation,
 immediate deprovisioning, tamper-evident audit, and tokens hashed at rest — the
-technical backbone several TSC criteria require is in place. The principal gaps
-before a SOC 2 Type II are now **SCIM auto-provisioning**, **encryption at rest**,
-and the **organizational/process controls** that an audit demands independent of
-the codebase.
+technical backbone several TSC criteria require is in place — including memory
+content encrypted at rest. The principal gaps before a SOC 2 Type II are now
+**SCIM auto-provisioning**, **metadata/full-DB encryption**, and the
+**organizational/process controls** that an audit demands independent of the
+codebase.
