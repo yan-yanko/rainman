@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 205 tests across 16 files
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 215 tests across 17 files
 
 ## Architecture
 
@@ -49,9 +49,13 @@ rainman/
   __main__.py       CLI entry point (argparse)
 server/             SEPARATE package (rainman-server) — self-hosted sync server, stdlib-only
   rainman_server/
-    db.py           SQLite store: workspaces, seq cursor, tokens, items + tombstones
-    app.py          ThreadingHTTPServer: /v1/health, /v1/workspaces/{ws}/pull|push (bearer auth)
-    __main__.py     `rainman_server serve` + `token add`
+    db.py           SQLite: seq cursor, tokens (RBAC role), items + tombstones, audit trail
+    app.py          ThreadingHTTPServer: sync (pull/push) + admin API, RBAC-enforced, audited
+    console.py      Minimal admin web console (HTML+vanilla JS) served at /admin
+    __main__.py     `rainman_server serve` + `token add --role`
+  Dockerfile        Container image (stdlib, no pip step)
+  DEPLOY.md         Production + air-gapped deploy runbook
+SOC2_READINESS.md   Control mapping to SOC 2 Trust Services Criteria + gap list
 tests/                  (181 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
@@ -69,6 +73,7 @@ tests/                  (181 tests total, all marked `unit`)
   test_review.py      quarantine review queue: approve/reject (Ph2c)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync.py        end-to-end sync over HTTP: push/pull/tombstone/auth (Ph2b)
+  test_rbac.py        role enforcement, admin API, audit, token migration (Ph3)
   conftest.py         adds server/ to sys.path for sync tests
 ```
 
@@ -145,8 +150,14 @@ rainman sync                          # Push + pull project memories (Ph2b)
 
 ```bash
 python -m rainman_server serve --host 0.0.0.0 --port 8787 --db ./sync.db
-python -m rainman_server token add --user alice --workspace acme-api
+python -m rainman_server token add --user alice --workspace acme-api --role contributor
 ```
+
+RBAC (Phase 3): roles `reader` (pull) < `contributor` (pull+push) < `admin`
+(manage tokens + audit). Admin console at `/admin`. Centralized audit trail
+(push/pull/token/revoke) in the server DB. Deploy: `server/DEPLOY.md` (Docker +
+air-gapped); compliance: `SOC2_READINESS.md`. SSO/SAML/SCIM deferred pending a
+target IdP; server stays stdlib-only until then.
 
 Syncs the **project layer only** (global is personal). Monotonic-cursor delta
 protocol with tombstones; last-write-to-server-wins by `seq`. Bearer token per

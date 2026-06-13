@@ -31,6 +31,8 @@ def main():
     p_token_add = token_sub.add_parser("add", help="Mint a per-seat token")
     p_token_add.add_argument("--user", required=True)
     p_token_add.add_argument("--workspace", required=True)
+    p_token_add.add_argument("--role", default="contributor",
+                             choices=["reader", "contributor", "admin"])
     p_token_add.add_argument("--token", help="Token value (default: random)")
     p_token_add.add_argument("--db", default="rainman-sync.db")
 
@@ -47,8 +49,8 @@ def main():
     elif args.command == "token" and args.token_command == "add":
         db = ServerDB(args.db)
         token = args.token or secrets.token_hex(24)
-        db.add_token(token, args.user, args.workspace)
-        print(f"Token for user={args.user} workspace={args.workspace}:")
+        db.add_token(token, args.user, args.workspace, role=args.role)
+        print(f"Token for user={args.user} workspace={args.workspace} role={args.role}:")
         print(token)
     else:
         parser.print_help()

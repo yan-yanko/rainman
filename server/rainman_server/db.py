@@ -7,6 +7,9 @@ monotonically increasing ``seq`` so clients can pull "everything since my
 cursor" without any clock coordination. Deletes are tombstones (``deleted=1``)
 so they propagate to other clients.
 
+Phase 3 adds RBAC (a ``role`` per token: reader < contributor < admin) and a
+centralized, append-only server-side audit trail of push / pull / admin events.
+
 Stdlib only (``sqlite3``). WAL mode for concurrent request threads. A new
 connection per call keeps it thread-safe under ThreadingHTTPServer.
 """
@@ -14,8 +17,15 @@ connection per call keeps it thread-safe under ThreadingHTTPServer.
 import hashlib
 import json
 import os
-import sqlite3
+import secrets
+import time
 from typing import List, Optional, Tuple
+
+# Role hierarchy. Higher rank == more capability.
+ROLE_READER = "reader"
+ROLE_CONTRIBUTOR = "contributor"
+ROLE_ADMIN = "admin"
+ROLE_RANK = {ROLE_READER: 1, ROLE_CONTRIBUTOR: 2, ROLE_ADMIN: 3}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER);
@@ -24,7 +34,8 @@ INSERT OR IGNORE INTO meta(key, value) VALUES ('seq', 0);
 CREATE TABLE IF NOT EXISTS tokens (
     token     TEXT PRIMARY KEY,
     username  TEXT NOT NULL,
-    workspace TEXT NOT NULL
+    workspace TEXT NOT NULL,
+    role      TEXT NOT NULL DEFAULT 'contributor'
 );
 
 CREATE TABLE IF NOT EXISTS items (
@@ -37,6 +48,16 @@ CREATE TABLE IF NOT EXISTS items (
     PRIMARY KEY (workspace, id)
 );
 CREATE INDEX IF NOT EXISTS idx_items_seq ON items(workspace, seq);
+
+CREATE TABLE IF NOT EXISTS audit (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        REAL NOT NULL,
+    workspace TEXT NOT NULL,
+    actor     TEXT NOT NULL,
+    action    TEXT NOT NULL,
+    detail    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ws ON audit(workspace, id);
 """
 
 # Fields excluded from the content hash: volatile per-client rehearsal stats
@@ -59,11 +80,13 @@ class ServerDB:
         conn = self._connect()
         try:
             conn.executescript(_SCHEMA)
+            self._migrate(conn)
             conn.commit()
         finally:
             conn.close()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self):
+        import sqlite3
         conn = sqlite3.connect(self.path, timeout=5.0)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
@@ -71,34 +94,110 @@ class ServerDB:
         return conn
 
     @staticmethod
-    def _next_seq(conn: sqlite3.Connection) -> int:
+    def _migrate(conn) -> None:
+        # Old token DBs (pre-RBAC) lack the role column — add it, defaulting to
+        # contributor (the pre-RBAC behavior: any valid token could push+pull).
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(tokens)")}
+        if "role" not in cols:
+            conn.execute(
+                "ALTER TABLE tokens ADD COLUMN role TEXT NOT NULL DEFAULT 'contributor'"
+            )
+
+    @staticmethod
+    def _next_seq(conn) -> int:
         conn.execute("UPDATE meta SET value = value + 1 WHERE key = 'seq'")
         return conn.execute("SELECT value FROM meta WHERE key = 'seq'").fetchone()[0]
 
-    # ── Tokens ───────────────────────────────────────────────────
+    # ── Tokens / RBAC ────────────────────────────────────────────
 
-    def add_token(self, token: str, username: str, workspace: str) -> None:
+    def add_token(self, token: str, username: str, workspace: str,
+                  role: str = ROLE_CONTRIBUTOR) -> None:
+        if role not in ROLE_RANK:
+            raise ValueError(f"unknown role: {role}")
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO tokens (token, username, workspace) VALUES (?, ?, ?)",
-                    (token, username, workspace),
+                    "INSERT OR REPLACE INTO tokens (token, username, workspace, role) "
+                    "VALUES (?, ?, ?, ?)",
+                    (token, username, workspace, role),
                 )
         finally:
             conn.close()
 
-    def resolve_token(self, token: str) -> Optional[Tuple[str, str]]:
+    def create_token(self, username: str, workspace: str, role: str) -> str:
+        """Mint a random token and store it. Returns the token (shown once)."""
+        token = secrets.token_hex(24)
+        self.add_token(token, username, workspace, role)
+        return token
+
+    def resolve_token(self, token: str) -> Optional[Tuple[str, str, str]]:
+        """Return (username, workspace, role) or None."""
         if not token:
             return None
         conn = self._connect()
         try:
             row = conn.execute(
-                "SELECT username, workspace FROM tokens WHERE token = ?", (token,)
+                "SELECT username, workspace, role FROM tokens WHERE token = ?", (token,)
             ).fetchone()
-            return (row[0], row[1]) if row else None
+            return (row[0], row[1], row[2]) if row else None
         finally:
             conn.close()
+
+    def list_users(self, workspace: str) -> List[dict]:
+        """Distinct users in a workspace with their highest role (no secrets)."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT username, role FROM tokens WHERE workspace = ?", (workspace,)
+            ).fetchall()
+        finally:
+            conn.close()
+        best: dict = {}
+        for username, role in rows:
+            if username not in best or ROLE_RANK[role] > ROLE_RANK[best[username]]:
+                best[username] = role
+        return [{"username": u, "role": r} for u, r in sorted(best.items())]
+
+    def revoke_user(self, workspace: str, username: str) -> int:
+        """Delete all of a user's tokens in a workspace. Returns count removed."""
+        conn = self._connect()
+        try:
+            with conn:
+                cur = conn.execute(
+                    "DELETE FROM tokens WHERE workspace = ? AND username = ?",
+                    (workspace, username),
+                )
+                return cur.rowcount
+        finally:
+            conn.close()
+
+    # ── Audit ────────────────────────────────────────────────────
+
+    def log_audit(self, workspace: str, actor: str, action: str, detail: str = "") -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO audit (ts, workspace, actor, action, detail) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (time.time(), workspace, actor, action, detail),
+                )
+        finally:
+            conn.close()
+
+    def get_audit(self, workspace: str, limit: int = 100) -> List[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT ts, actor, action, detail FROM audit "
+                "WHERE workspace = ? ORDER BY id DESC LIMIT ?",
+                (workspace, limit),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [{"ts": ts, "actor": a, "action": ac, "detail": d}
+                for ts, a, ac, d in rows]
 
     # ── Sync ─────────────────────────────────────────────────────
 
@@ -136,7 +235,6 @@ class ServerDB:
                     mid = data.get("id")
                     if not mid:
                         continue
-                    # Server stamps the authenticated author as provenance.
                     data = {**data, "author": author or data.get("author", "")}
                     h = content_hash(data)
                     existing = conn.execute(
@@ -144,7 +242,7 @@ class ServerDB:
                         (workspace, mid),
                     ).fetchone()
                     if existing and existing[0] == h and not existing[1]:
-                        continue  # unchanged
+                        continue
                     seq = self._next_seq(conn)
                     conn.execute(
                         "INSERT OR REPLACE INTO items "
@@ -160,7 +258,7 @@ class ServerDB:
                         (workspace, mid),
                     ).fetchone()
                     if not existing or existing[0]:
-                        continue  # unknown or already a tombstone
+                        continue
                     seq = self._next_seq(conn)
                     conn.execute(
                         "UPDATE items SET deleted = 1, seq = ?, data = '{}', content_hash = '' "
