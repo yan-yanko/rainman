@@ -22,7 +22,8 @@ controls (personnel, vendor management, physical security) out of scope here.
 | Deprovisioning | ✅ | `revoke` removes all of a user's tokens immediately (admin console / `/v1/admin/revoke`) |
 | Secrets not stored in source control | ✅ | Client token kept in `~/.rainman/sync_credentials.json` or env, never the committable `.rainman/` |
 | Bearer tokens hashed at rest | ✅ | Server stores/looks up only SHA-256 token digests (`token_digest`); a leaked DB cannot be used to impersonate users. Raw token never persisted. |
-| MFA / SSO | ⛔ Gap | Deferred (SSO/SAML/SCIM). Today: pre-shared tokens. Compensating: short-lived rotated tokens behind VPN. |
+| SSO / MFA | ✅ | OIDC bearer-JWT SSO from any RS256 IdP augments static tokens; **MFA is delegated to the IdP**. Tokens are RS256-pinned with `iss`/`aud`/`exp` verified (`server/rainman_server/oidc.py`). |
+| Automated provisioning (SCIM) | ⛔ Gap | Users are mapped from OIDC claims at login and managed via the admin console; automated SCIM provisioning/deprovisioning is not yet implemented. |
 
 ### CC7 — System Operations / Monitoring
 
@@ -53,18 +54,19 @@ controls (personnel, vendor management, physical security) out of scope here.
 
 ## Gaps to a real SOC 2 (work to close)
 
-1. **SSO / MFA** — replace pre-shared tokens with OIDC/SAML + SCIM provisioning (deferred pending a target IdP; this is also where the server takes its first dependency).
-2. **Encryption at rest** — host-level disk encryption today; app-level (SQLCipher) deferred with the stdlib-only constraint. Note bearer tokens are already hashed at rest regardless.
+1. **SCIM provisioning** — OIDC SSO + IdP-delegated MFA are now supported (any RS256 IdP); automated user/group provisioning + deprovisioning (SCIM) is still manual via the admin console.
+2. **Encryption at rest** — host-level disk encryption today; app-level (SQLCipher / AES-GCM on the content column) is the next server-dep item now that the stdlib-only constraint is lifted for the server. Bearer tokens are already hashed at rest regardless.
 3. **Organizational controls** — access reviews, incident response runbook, vendor management, security training — required for the audit regardless of code.
 4. **Formal policies** — data retention, access control, and change management policies documented and approved.
 
-*Closed since first draft:* bearer-token-at-rest (now SHA-256 hashed) and audit-log tamper-evidence (now hash-chained).
+*Closed since first draft:* bearer-token-at-rest (SHA-256 hashed), audit-log tamper-evidence (hash-chained), and SSO/MFA (OIDC, IdP-delegated MFA).
 
 ## Summary for a security reviewer
 
 The product's architecture is **privacy- and access-control-first**: self-hosted,
-zero egress, per-seat RBAC, workspace isolation, immediate deprovisioning, and a
-centralized audit trail — the technical backbone several TSC criteria require is
-in place. The principal gaps before a SOC 2 Type II are **SSO/MFA**,
-**encryption at rest**, and the **organizational/process controls** that an audit
-demands independent of the codebase.
+zero egress, per-seat RBAC + OIDC SSO (IdP-delegated MFA), workspace isolation,
+immediate deprovisioning, tamper-evident audit, and tokens hashed at rest — the
+technical backbone several TSC criteria require is in place. The principal gaps
+before a SOC 2 Type II are now **SCIM auto-provisioning**, **encryption at rest**,
+and the **organizational/process controls** that an audit demands independent of
+the codebase.

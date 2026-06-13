@@ -52,6 +52,26 @@ Bearer tokens are stored as SHA-256 digests (never cleartext at rest). The
 audit log is hash-chained; `GET /v1/admin/audit/verify` returns `{ok, broken_at}`
 so tampering with or deleting any past row is detectable.
 
+## SSO (OIDC)
+
+The server also accepts **OIDC bearer JWTs** from any standard provider (Okta,
+Entra ID, Google Workspace, Keycloak, …) *alongside* static tokens — a JWT-shaped
+credential is validated as OIDC, anything else as a static token. JWTs are
+verified with PyJWT: **RS256 only**, signature checked against the IdP JWKS (or a
+pinned public key), with `iss`/`aud`/`exp` required. Verified claims map to the
+same `(username, workspace, role)` RBAC model; **MFA is delegated to the IdP**.
+
+Enable via env (see `DEPLOY.md` for the full list):
+
+```bash
+export RAINMAN_OIDC_ISSUER=https://your-idp/        RAINMAN_OIDC_AUDIENCE=rainman-sync
+export RAINMAN_OIDC_JWKS_URI=https://your-idp/jwks   RAINMAN_OIDC_WORKSPACE=acme-api
+export RAINMAN_OIDC_ROLE_CLAIM=groups RAINMAN_OIDC_ROLE_MAP='{"rainman-admins":"admin","rainman-devs":"contributor"}'
+```
+
+Static tokens remain for CI/bots/service accounts. SCIM auto-provisioning is
+not yet implemented (users are mapped from claims at login).
+
 All authenticated requests require `Authorization: Bearer <token>`; the token is
 scoped to a single workspace. Conflicts resolve last-write-to-server-wins by
 `seq`; the client's local audit log preserves history.

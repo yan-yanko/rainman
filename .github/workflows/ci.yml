@@ -14,6 +14,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e .
+      - run: pip install ./server          # server deps (PyJWT[crypto]) for sync/SSO tests
       - run: pip install pytest ruff
       - run: ruff check rainman/ server/
       - run: pytest tests/ -m unit -v

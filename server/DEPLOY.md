@@ -42,6 +42,26 @@ only the inbound listener). For a fully offline pipeline:
 Or skip Docker entirely: copy `server/rainman_server/` to the air-gapped host
 and run it with the system Python. No wheels, no PyPI.
 
+## SSO (OIDC) — optional
+
+Set these to accept OIDC bearer JWTs in addition to static tokens (unset = static
+tokens only). MFA is handled by your IdP.
+
+| Env var | Purpose |
+|---|---|
+| `RAINMAN_OIDC_ISSUER` | IdP issuer URL (required to enable OIDC) |
+| `RAINMAN_OIDC_AUDIENCE` | expected `aud` claim (required) |
+| `RAINMAN_OIDC_JWKS_URI` | IdP JWKS endpoint (production) |
+| `RAINMAN_OIDC_PUBLIC_KEY` | *or* a pinned PEM public key (air-gapped, no JWKS fetch) |
+| `RAINMAN_OIDC_USERNAME_CLAIM` | claim used as username (default `email`) |
+| `RAINMAN_OIDC_WORKSPACE` / `..._WORKSPACE_CLAIM` | static workspace, or a claim carrying it |
+| `RAINMAN_OIDC_ROLE_CLAIM` | claim with group/role values (default `groups`) |
+| `RAINMAN_OIDC_ROLE_MAP` | JSON `{claim_value: role}`, e.g. `{"rainman-admins":"admin"}` |
+| `RAINMAN_OIDC_DEFAULT_ROLE` | role when no mapping matches (default `reader`) |
+
+Air-gapped note: use `RAINMAN_OIDC_PUBLIC_KEY` to pin the IdP signing key so the
+server never needs to fetch a JWKS over the network.
+
 ## TLS
 
 The server speaks **plain HTTP** and is designed to sit behind a TLS-terminating

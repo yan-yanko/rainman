@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 228 tests across 18 files
+**Tests:** `pip install -e . && pip install ./server && pytest tests/ -m unit` — 238 tests across 19 files. (`./server` brings PyJWT[crypto] for the sync/SSO tests; without it those import-skip/fail.)
 
 ## Architecture
 
@@ -52,6 +52,7 @@ server/             SEPARATE package (rainman-server) — self-hosted sync serve
     db.py           SQLite: seq cursor, tokens (RBAC role), items + tombstones, audit trail
     app.py          ThreadingHTTPServer: sync (pull/push) + admin API, RBAC-enforced, audited
     console.py      Minimal admin web console (HTML+vanilla JS) served at /admin
+    oidc.py         OIDC SSO: RS256 JWT validation (PyJWT) + claim->RBAC mapping
     __main__.py     `rainman_server serve` + `token add --role`
   Dockerfile        Container image (stdlib, no pip step)
   DEPLOY.md         Production + air-gapped deploy runbook
@@ -75,6 +76,7 @@ tests/                  (181 tests total, all marked `unit`)
   test_sync.py        end-to-end sync over HTTP: push/pull/tombstone/auth (Ph2b)
   test_rbac.py        role enforcement, admin API, audit, token migration (Ph3)
   test_hardening.py   token hashing at rest + audit hash-chain tamper-evidence
+  test_oidc.py        OIDC SSO: claim->role mapping, rejection cases, static coexistence
   conftest.py         adds server/ to sys.path for sync tests
 ```
 
@@ -160,6 +162,13 @@ RBAC (Phase 3): roles `reader` (pull) < `contributor` (pull+push) < `admin`
 air-gapped); compliance: `SOC2_READINESS.md`. SSO/SAML/SCIM deferred pending a
 target IdP; server stays stdlib-only until then.
 
+SSO (OIDC): the server accepts OIDC bearer JWTs from any RS256 IdP alongside
+static tokens (`oidc.py`) — JWT-shaped credential → OIDC path, else static
+token; both feed the same RBAC model. RS256-pinned (no alg confusion),
+`iss`/`aud`/`exp` verified, JWKS or pinned-key. MFA delegated to the IdP. Config
+via `RAINMAN_OIDC_*` env. SCIM provisioning not yet built (claims mapped at
+login). Server deps now: `cryptography`, `PyJWT[crypto]`.
+
 Server hardening: bearer tokens are stored/looked up as SHA-256 digests only
 (`token_digest`) — never cleartext at rest; raw tokens migrate in place. The
 audit log is hash-chained (`row_hash = sha256(prev | fields)`); `verify_audit`
@@ -211,10 +220,10 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 ## Hard Rules
 
-- **Zero external dependencies.** stdlib only. No pip install needed beyond setuptools.
+- **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
 - **Never break the existing tests (205 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/ server/`.
-- **Client stays stdlib-only forever.** The `server/` package is also stdlib-only today but is separate, so deps are *allowed* there if ever needed — never in `rainman/`.
+- **Client stays stdlib-only forever; the `server/` package MAY take deps** (decision 2026-06-13). The server is separate, so dependencies there don't touch the client's zero-dep claim. Server deps so far: `cryptography`, `PyJWT[crypto]` (for SSO/OIDC + encryption-at-rest). Never add a dep to `rainman/`.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
 - **Auto-link threshold: 0.25.** New memories auto-link to existing ones if keyword overlap >= 25%.

@@ -39,7 +39,7 @@ except ValueError:
 MAX_ITEMS_PER_PUSH = 2000
 
 
-def make_handler(db: ServerDB):
+def make_handler(db: ServerDB, oidc=None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -58,11 +58,18 @@ def make_handler(db: ServerDB):
             pass
 
         def _principal(self):
-            """Return (username, workspace, role) from the bearer token, or None."""
+            """Return (username, workspace, role) from the bearer credential, or None.
+
+            A JWT-shaped credential (header.payload.signature) is validated as
+            an OIDC token when SSO is configured; anything else is looked up as
+            a static per-seat token. The two paths feed the same RBAC model."""
             header = self.headers.get("Authorization", "")
             if not header.startswith("Bearer "):
                 return None
-            return db.resolve_token(header[7:].strip())
+            cred = header[7:].strip()
+            if oidc is not None and cred.count(".") == 2:
+                return oidc.authenticate(cred)  # None on invalid JWT
+            return db.resolve_token(cred)
 
         def _require(self, min_role: str, workspace=None):
             """Authorize the request. Returns principal tuple or sends an error
@@ -197,8 +204,14 @@ def make_handler(db: ServerDB):
     return Handler
 
 
-def make_server(host: str, port: int, db_path: str):
-    """Build (httpd, db). Call httpd.serve_forever() to run."""
+def make_server(host: str, port: int, db_path: str, oidc="from_env"):
+    """Build (httpd, db). Call httpd.serve_forever() to run.
+
+    ``oidc`` defaults to building an OIDC validator from environment config
+    (no-op if unset); pass an explicit validator or None to override."""
     db = ServerDB(db_path)
-    httpd = ThreadingHTTPServer((host, port), make_handler(db))
+    if oidc == "from_env":
+        from rainman_server.oidc import validator_from_env
+        oidc = validator_from_env()
+    httpd = ThreadingHTTPServer((host, port), make_handler(db, oidc=oidc))
     return httpd, db
