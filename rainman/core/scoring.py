@@ -18,6 +18,7 @@ import time
 from typing import Dict, List, Optional
 
 from rainman.core.models import Memory
+from rainman.core import trust
 
 
 # Fixed scoring weights (no personality modulation)
@@ -70,8 +71,13 @@ def keyword_score(entry: Memory, query_words: List[str]) -> float:
     overlap = matched / len(query_words)
 
     # Rehearsal boost (ACT-R: frequently recalled memories strengthen)
-    # Capped to prevent rich-get-richer: max 2x at 10+ recalls
-    rehearsal = 1 + min(entry.recall_count, 10) * 0.1
+    # Capped to prevent rich-get-richer: max 2x at 10+ recalls.
+    # Denied to ingest-trust memories so a poisoned entry can't ride the
+    # rehearsal feedback loop after surfacing once (see core/trust.py).
+    if trust.trust_level(entry.source) == trust.INGEST:
+        rehearsal = 1.0
+    else:
+        rehearsal = 1 + min(entry.recall_count, 10) * 0.1
 
     return overlap * rehearsal
 
@@ -90,8 +96,12 @@ def temporal_decay(entry: Memory, now: Optional[float] = None) -> float:
     decay_exp = 0.5  # power-law exponent
 
     # Rehearsal: accessed memories decay slower
-    # Capped to prevent unbounded amplification: max 2.5x at 10+ recalls
-    rehearsal = 1 + min(entry.recall_count, 10) * 0.15
+    # Capped to prevent unbounded amplification: max 2.5x at 10+ recalls.
+    # Denied to ingest-trust memories (see keyword_score / core/trust.py).
+    if trust.trust_level(entry.source) == trust.INGEST:
+        rehearsal = 1.0
+    else:
+        rehearsal = 1 + min(entry.recall_count, 10) * 0.15
 
     return rehearsal / (1 + days ** decay_exp)
 
@@ -131,6 +141,7 @@ def associative_score(
     top_ids: List[str],
     reverse_index: Optional[Dict[str, set]] = None,
     entry: Optional[Memory] = None,
+    trust_index: Optional[Dict[str, int]] = None,
 ) -> float:
     """
     Graph-based associative boost.
@@ -138,6 +149,13 @@ def associative_score(
 
     Checks if this entry is linked (via linked_ids) to any top-scoring entry.
     Uses reverse_index when available to avoid O(n) scan.
+
+    Trust restriction: when ``trust_index`` (id -> trust rank) is supplied,
+    boost is NOT allowed to flow from a *higher-trust* anchor down to a
+    lower-trust entry. This stops a poisoned (low-trust) memory from riding
+    the credibility of curated knowledge it auto-linked itself to. Anchors of
+    equal-or-lower trust still count. When ``trust_index`` is None, no
+    restriction applies (preserves direct-call behavior).
     """
     # Use provided entry or fall back to O(n) lookup
     if entry is None:
@@ -151,19 +169,30 @@ def associative_score(
 
     top_set = set(top_ids)
 
+    # An anchor is disqualified if it's strictly more trusted than this entry.
+    def _allowed(anchor_id: str) -> bool:
+        if trust_index is None:
+            return True
+        entry_rank = trust_index.get(entry_id, trust.RANK[trust.USER])
+        return trust_index.get(anchor_id, trust.RANK[trust.USER]) <= entry_rank
+
     # Check forward links: entry -> top result
-    linked_to_top = sum(1 for lid in entry.linked_ids if lid in top_set)
+    linked_to_top = sum(
+        1 for lid in entry.linked_ids if lid in top_set and _allowed(lid)
+    )
 
     if linked_to_top == 0:
         # Check reverse links: top result -> entry
         if reverse_index is not None:
             # O(1) lookup via inverted index
             reverse_linkers = reverse_index.get(entry_id, set())
-            linked_to_top = len(reverse_linkers & top_set)
+            linked_to_top = sum(
+                1 for a in (reverse_linkers & top_set) if _allowed(a)
+            )
         else:
             # Fallback: O(n) scan
             for e in all_entries:
-                if e.id in top_set and entry_id in e.linked_ids:
+                if e.id in top_set and entry_id in e.linked_ids and _allowed(e.id):
                     linked_to_top += 1
 
     if linked_to_top == 0:
@@ -180,9 +209,16 @@ def compute_score(
     all_entries: Optional[List[Memory]] = None,
     reverse_index: Optional[Dict[str, set]] = None,
     now: Optional[float] = None,
+    trust_index: Optional[Dict[str, int]] = None,
 ) -> Dict[str, float]:
     """
     Full scoring pipeline. Returns component breakdown + total.
+
+    ``total`` is the weighted sum of the four components scaled by a small
+    trust *quality prior* (``trust_prior``). For user-trust memories the prior
+    is 1.0, so ``total`` equals the plain weighted sum — the prior only nudges
+    auto-learned/ingested memories down as a tiebreaker, never as a security
+    boundary (see core/trust.py).
     """
     kw = keyword_score(entry, query_words)
     rec = temporal_decay(entry, now=now)
@@ -194,19 +230,23 @@ def compute_score(
             entry.id, all_entries, top_ids,
             reverse_index=reverse_index,
             entry=entry,
+            trust_index=trust_index,
         )
 
-    total = (
+    weighted = (
         WEIGHTS["keyword"] * kw
         + WEIGHTS["recency"] * rec
         + WEIGHTS["importance"] * imp
         + WEIGHTS["associative"] * assoc
     )
 
+    prior = trust.quality_prior(entry.source)
+
     return {
-        "total": total,
+        "total": weighted * prior,
         "keyword": kw,
         "recency": rec,
         "importance": imp,
         "associative": assoc,
+        "trust_prior": prior,
     }

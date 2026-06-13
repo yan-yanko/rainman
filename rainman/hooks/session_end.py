@@ -115,7 +115,8 @@ def main():
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:
-        print(f"[rainman] session_end: failed to parse input: {e}", file=sys.stderr)
+        from rainman.core.log import get_logger
+        get_logger("hooks.session_end").warning("failed to parse input: %s", e)
         sys.exit(0)
 
     # Skip if user explicitly cleared the session
@@ -149,13 +150,18 @@ def main():
 
     engine = RainmanEngine(project_dir=cwd)
 
+    # Org policy: auto-learn can be disabled entirely.
+    if engine.policy.get("disable_auto_learn"):
+        sys.exit(0)
+    extra_patterns = engine.policy.get("extra_redaction_patterns")
+
     stored = 0
     for content, category in snippets:
         if stored >= MAX_MEMORIES_PER_SESSION:
             break
 
-        # Redact secrets before storing
-        content = redact_content(content)
+        # Redact secrets before storing (built-in + org-policy patterns).
+        content = redact_content(content, extra_patterns=extra_patterns)
         if len(content.replace("[REDACTED]", "").strip()) < 30:
             continue
 
@@ -191,7 +197,8 @@ def _read_transcript(path):
                 except json.JSONDecodeError:
                     continue
     except (OSError, IOError) as e:
-        print(f"[rainman] session_end: could not read transcript: {e}", file=sys.stderr)
+        from rainman.core.log import get_logger
+        get_logger("hooks.session_end").warning("could not read transcript: %s", e)
     return results
 
 

@@ -41,7 +41,8 @@ def main():
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:
-        print(f"[rainman] session_start: failed to parse input: {e}", file=sys.stderr)
+        from rainman.core.log import get_logger
+        get_logger("hooks.session_start").warning("failed to parse input: %s", e)
         hook_input = {}
 
     cwd = hook_input.get("cwd", os.getcwd())
@@ -52,15 +53,38 @@ def main():
 
     engine = RainmanEngine(project_dir=cwd)
 
+    # Best-effort pull of teammates' shared memories. Silent on any failure —
+    # sync must never block or noise up session start.
+    _auto_pull(engine)
+
     if source == "compact":
         _handle_compaction(engine, hook_input)
     else:
         _handle_session_start(engine)
 
 
+def _auto_pull(engine):
+    """Pull from the sync remote if one is configured. Never raises."""
+    try:
+        from rainman.sync import SyncClient, SyncError
+        client = SyncClient(engine)
+        if client.is_configured():
+            client.pull()
+    except (SyncError, Exception) as e:
+        from rainman.core.log import get_logger
+        get_logger("hooks.session_start").warning("auto-pull skipped: %s", e)
+
+
+# Unsolicited context injection is the dangerous poisoning path (no query, no
+# user choice), so third-party (ingest/git) memories are held out of it by
+# default. Explicit `recall` tool calls still surface them. The floor is
+# org-policy-configurable via ``auto_inject_min_trust``.
+
+
 def _handle_session_start(engine):
     """Normal session start — load general project context."""
-    results = engine.context(limit=8)
+    floor = engine.policy.get("auto_inject_min_trust")
+    results = engine.context(limit=8, min_trust=floor)
 
     if not results:
         sys.exit(0)
@@ -71,6 +95,7 @@ def _handle_session_start(engine):
         line = f"  {i}. [{m.category}] {m.content[:120]}"
         if m.file_refs:
             line += f" (files: {', '.join(m.file_refs)})"
+        line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
         lines.append(line)
 
     lines.append(
@@ -91,10 +116,12 @@ def _handle_compaction(engine, hook_input):
     lines = ["[Rainman] Re-injecting project memory after context compaction:\n"]
 
     seen_ids = set()
+    floor = engine.policy.get("auto_inject_min_trust")
 
     if query:
-        # Recall by topic — surface memories relevant to current work
-        results = engine.recall(query, limit=5)
+        # Recall by topic — surface memories relevant to current work.
+        # Still unsolicited (compaction-triggered), so the auto-inject floor applies.
+        results = engine.recall(query, limit=5, min_trust=floor)
         if results:
             lines.append("Relevant to current work:")
             for i, r in enumerate(results, 1):
@@ -103,13 +130,12 @@ def _handle_compaction(engine, hook_input):
                 line = f"  {i}. [{m.category}] {m.content[:150]}"
                 if m.file_refs:
                     line += f"\n     files: {', '.join(m.file_refs)}"
-                if m.source:
-                    line += f"\n     source: {m.source}"
+                line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
                 lines.append(line)
             lines.append("")
 
     # Always include high-importance context regardless of topic
-    context = engine.context(limit=5)
+    context = engine.context(limit=5, min_trust=floor)
     important = [r for r in context if r.memory.id not in seen_ids]
     if important:
         lines.append("High-importance project knowledge:")
@@ -118,8 +144,7 @@ def _handle_compaction(engine, hook_input):
             line = f"  {i}. [{m.category}] {m.content[:150]}"
             if m.file_refs:
                 line += f"\n     files: {', '.join(m.file_refs)}"
-            if m.source:
-                line += f"\n     source: {m.source}"
+            line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
             lines.append(line)
 
     lines.append(

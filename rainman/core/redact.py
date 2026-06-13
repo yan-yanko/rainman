@@ -12,7 +12,11 @@ Conservative: false redaction of a hash is acceptable; a leaked key is not.
 """
 
 import re
-from typing import Optional
+from typing import List, Optional
+
+from rainman.core.log import get_logger
+
+log = get_logger(__name__)
 
 
 # File paths that should never be auto-learned
@@ -65,8 +69,8 @@ _SECRET_PATTERNS = [
 ]
 
 
-def is_sensitive_path(file_path: str) -> bool:
-    """Check if a file path matches the sensitive denylist."""
+def is_sensitive_path(file_path: str, extra_denylist: Optional[List[str]] = None) -> bool:
+    """Check if a file path matches the sensitive denylist (built-in + org policy)."""
     if not file_path:
         return False
 
@@ -74,35 +78,55 @@ def is_sensitive_path(file_path: str) -> bool:
     normalized = file_path.replace("\\", "/").lower()
     basename = normalized.split("/")[-1] if "/" in normalized else normalized
 
-    for pattern in SENSITIVE_PATH_PATTERNS:
+    patterns = SENSITIVE_PATH_PATTERNS + [p.lower() for p in (extra_denylist or [])]
+    for pattern in patterns:
         if pattern in basename or pattern in normalized:
             return True
 
     return False
 
 
-def redact_content(content: str) -> str:
-    """Replace known secret patterns with [REDACTED]."""
+def _compile_extra(extra_patterns: Optional[List[str]]):
+    """Compile org-policy regex strings, skipping any that don't compile."""
+    compiled = []
+    for p in extra_patterns or []:
+        try:
+            compiled.append(re.compile(p))
+        except re.error as e:
+            log.warning("ignoring invalid org redaction pattern %r: %s", p, e)
+    return compiled
+
+
+def redact_content(content: str, extra_patterns: Optional[List[str]] = None) -> str:
+    """Replace known secret patterns (built-in + org policy) with [REDACTED]."""
     if not content:
         return content
 
     result = content
-    for pattern in _SECRET_PATTERNS:
+    for pattern in _SECRET_PATTERNS + _compile_extra(extra_patterns):
         result = pattern.sub("[REDACTED]", result)
 
     return result
 
 
-def safe_content(content: str, file_path: Optional[str] = None) -> Optional[str]:
+def safe_content(
+    content: str,
+    file_path: Optional[str] = None,
+    extra_patterns: Optional[List[str]] = None,
+    extra_path_denylist: Optional[List[str]] = None,
+) -> Optional[str]:
     """
     Full safety check for auto-learned content.
     Returns None if the file should be skipped entirely.
     Returns redacted content otherwise.
+
+    ``extra_patterns`` / ``extra_path_denylist`` come from org policy and are
+    applied on top of the built-in rules (never instead of them).
     """
-    if file_path and is_sensitive_path(file_path):
+    if file_path and is_sensitive_path(file_path, extra_denylist=extra_path_denylist):
         return None
 
-    redacted = redact_content(content)
+    redacted = redact_content(content, extra_patterns=extra_patterns)
 
     # If redaction removed most of the content, skip it
     if len(redacted.replace("[REDACTED]", "").strip()) < 20:

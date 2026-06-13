@@ -290,6 +290,19 @@ Rainman's scoring engine was extracted from [CogniTrait](https://github.com/yan-
 
 The core algorithms (ACT-R temporal decay, keyword scoring, associative linking) are proven across 40+ CogniTrait unit tests and validated on real-world election prediction, marketing research, and synthetic persona workloads.
 
+## Security
+
+Rainman is local-first by design: **no data leaves your machine** — zero
+external API calls, zero telemetry, zero runtime dependencies. Secrets are
+redacted before storage, and third-party content (`rainman ingest`, auto-learn)
+is trust-tagged and held out of unsolicited context injection by default.
+
+Memory-poisoning defense is **gating, not ranking**. For the full model see
+[`THREAT_MODEL.md`](THREAT_MODEL.md); for reporting and release verification see
+[`SECURITY.md`](SECURITY.md). Teams can distribute non-overridable policy
+(mandatory redaction, recall trust floors, audit logging, retention) via the
+org policy control plane.
+
 ## Requirements
 
 - Python 3.10+

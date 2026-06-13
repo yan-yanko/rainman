@@ -18,13 +18,18 @@ from typing import Dict, List, Optional, Any
 
 from rainman.core.models import Memory, RecallResult, CATEGORIES
 from rainman.core.sentiment import classify_sentiment
+from rainman.core.identity import current_actor
+from rainman.core.audit import AuditLogger, audit_enabled
+from rainman.core.config import load_policy
+from rainman.core import trust
 from rainman.core.scoring import (
     compute_score,
     build_reverse_link_index,
     CATEGORY_IMPORTANCE,
     IMPORTANCE_KEYWORDS,
 )
-from rainman.core.store import MemoryStore
+from rainman.core.store import GLOBAL_DIR
+from rainman.core.storage import make_store
 
 
 # ── Input limits ──────────────────────────────────────────────
@@ -45,6 +50,9 @@ LINK_THRESHOLD = 0.25
 # Max memories before oldest low-value entries are pruned
 MAX_MEMORIES = 2000
 
+# Sentinel: caller didn't pass min_trust, so fall back to org policy.
+_UNSET = object()
+
 
 class RainmanEngine:
     """
@@ -59,17 +67,58 @@ class RainmanEngine:
         project_dir: Optional[str] = None,
         global_dir: Optional[str] = None,
     ):
-        self.store = MemoryStore(
+        # Policy first — it decides which storage backend to use. Policy load
+        # only needs the directory paths, not a constructed store.
+        resolved_global = global_dir or GLOBAL_DIR
+        self.policy = load_policy(project_dir=project_dir, global_dir=resolved_global)
+        self.store = make_store(
             project_dir=project_dir,
             global_dir=global_dir,
+            backend=self.policy.get("storage_backend"),
         )
         self._memories: List[Memory] = []
         self._loaded = False
+        audit_on = bool(self.policy.get("audit")) or audit_enabled()
+        self.audit = AuditLogger(self.store.audit_path(), enabled=audit_on)
 
     def _ensure_loaded(self) -> None:
         if not self._loaded:
+            # Keep the in-memory set COMPLETE (both layers). save_all() persists
+            # whatever is in self._memories across layers, so filtering here
+            # would let a later save (forget / retention) wipe the dropped
+            # layer. Visibility filtering happens at read time in _visible().
             self._memories = self.store.load_all()
             self._loaded = True
+            self._apply_retention()
+
+    def _visible(self) -> List[Memory]:
+        """Memories eligible to surface: minus quarantined, minus the global
+        layer when org policy disables it. Never used for persistence."""
+        mems = self._memories
+        if self.policy.get("disable_global_layer"):
+            mems = [m for m in mems if m.layer != "global"]
+        return [m for m in mems if not m.metadata.get("quarantined")]
+
+    def _apply_retention(self) -> None:
+        """Delete memories older than the org retention TTL (compliance).
+
+        Operates on the complete loaded set and persists the removal. Applies
+        across layers — when an org enforces retention it means "we do not keep
+        data older than N days," period.
+        """
+        days = self.policy.get("retention_days")
+        if not days or days <= 0:
+            return
+        cutoff = time.time() - days * 86400
+        expired = [m for m in self._memories if m.timestamp < cutoff]
+        if not expired:
+            return
+        self._memories = [m for m in self._memories if m.timestamp >= cutoff]
+        self.store.save_all(self._memories)
+        self.audit.record(
+            "retention_prune", actor="system",
+            memory_ids=[m.id for m in expired], retention_days=days,
+        )
 
     # ── Public API ──────────────────────────────────────────────
 
@@ -84,6 +133,7 @@ class RainmanEngine:
         source: str = "cli",
         layer: str = "project",
         metadata: Optional[Dict[str, Any]] = None,
+        author: Optional[str] = None,
     ) -> Optional[Memory]:
         """Add a memory with auto-sentiment and auto-linking.
 
@@ -101,7 +151,16 @@ class RainmanEngine:
         if category not in CATEGORIES:
             category = "note"
 
+        # Org policy: forbidden categories are rejected outright.
+        if category in self.policy.get("category_denylist"):
+            return None
+
         if layer not in ("project", "global"):
+            layer = "project"
+
+        # Org policy: when the global layer is disabled, global writes fall
+        # back to the project layer rather than silently vanishing.
+        if layer == "global" and self.policy.get("disable_global_layer"):
             layer = "project"
 
         # Sanitize tags
@@ -119,6 +178,16 @@ class RainmanEngine:
         if importance is None:
             importance = self._calc_importance(content, category)
 
+        if author is None:
+            author = current_actor()
+
+        # Org policy: hold third-party (ingest) memories in quarantine — stored
+        # for the record but not recallable until reviewed (review queue: Ph2).
+        if metadata is None:
+            metadata = {}
+        if self.policy.get("quarantine_ingest") and trust.trust_level(source) == trust.INGEST:
+            metadata = {**metadata, "quarantined": True}
+
         memory = Memory(
             id=f"rm_{int(ts * 1000)}_{uuid.uuid4().hex[:6]}",
             content=content,
@@ -131,6 +200,7 @@ class RainmanEngine:
             source=source,
             file_refs=file_refs or [],
             layer=layer,
+            author=author,
             metadata=metadata or {},
         )
 
@@ -141,6 +211,10 @@ class RainmanEngine:
             self._prune()
 
         self.store.save_one(memory)
+        self.audit.record(
+            "store", actor=author, memory_ids=[memory.id],
+            source=source, layer=layer, category=category,
+        )
         return memory
 
     def recall(
@@ -148,10 +222,17 @@ class RainmanEngine:
         query: str,
         limit: int = 5,
         category: Optional[str] = None,
+        min_trust=_UNSET,
     ) -> List[RecallResult]:
         """
         Context-aware retrieval. Two-phase scoring with associative boost.
         Project memories get 1.2x boost over global.
+
+        ``min_trust`` (one of trust.USER/HOOK/INGEST) gates out memories below
+        that trust level entirely — a security control, distinct from the
+        quality prior that only nudges ranking. When omitted, the org policy's
+        ``recall_min_trust`` applies (default: no gate); pass None to force no
+        gate regardless of policy.
         """
         self._ensure_loaded()
         query_words = query.lower().split()
@@ -159,11 +240,24 @@ class RainmanEngine:
         if not self._memories:
             return []
 
-        entries = self._memories
+        if min_trust is _UNSET:
+            min_trust = self.policy.get("recall_min_trust")
+
+        entries = self._visible()
         if category:
             entries = [m for m in entries if m.category == category]
+        if min_trust is not None:
+            floor = trust.RANK[min_trust]
+            entries = [m for m in entries if trust.trust_rank(m.source) >= floor]
+
+        if not entries:
+            return []
 
         now = time.time()
+
+        # Trust ranks for the associative restriction (boost can't flow from a
+        # higher-trust anchor down to a lower-trust entry).
+        trust_index = {m.id: trust.trust_rank(m.source) for m in entries}
 
         # Phase 1: Score without associative boost
         initial = []
@@ -184,6 +278,7 @@ class RainmanEngine:
                 all_entries=entries,
                 reverse_index=reverse_index,
                 now=now,
+                trust_index=trust_index,
             )
 
             total = scores["total"]
@@ -199,6 +294,7 @@ class RainmanEngine:
                 recency_score=scores["recency"],
                 importance_score=scores["importance"],
                 associative_score=scores["associative"],
+                trust_prior=scores["trust_prior"],
             )
             results.append(result)
 
@@ -222,21 +318,38 @@ class RainmanEngine:
         for layer, updates in updates_by_layer.items():
             self.store.update_rehearsal_stats(updates, layer)
 
+        if self.audit.enabled:
+            self.audit.record(
+                "recall", actor=current_actor(),
+                memory_ids=[r.memory.id for r in top_results],
+                query=query[:200],
+            )
+
         return top_results
 
-    def context(self, limit: int = 10) -> List[RecallResult]:
+    def context(self, limit: int = 10, min_trust: Optional[str] = None) -> List[RecallResult]:
         """
         Get current working context: recent + high-importance memories.
         No query needed — returns a blend of what's fresh and what matters.
+
+        ``min_trust`` gates out memories below that trust level. Unsolicited
+        context injection (SessionStart) is the most dangerous poisoning path —
+        the user sees no query and makes no choice — so callers there pass a
+        stricter floor than explicit recall.
         """
         self._ensure_loaded()
         if not self._memories:
             return []
 
+        entries = self._visible()
+        if min_trust is not None:
+            floor = trust.RANK[min_trust]
+            entries = [m for m in entries if trust.trust_rank(m.source) >= floor]
+
         now = time.time()
         scored = []
 
-        for entry in self._memories:
+        for entry in entries:
             # Blend recency (60%) and importance (40%) for context
             days = max(0, (now - entry.timestamp) / 86400)
             recency = 1 / (1 + days ** 0.5)
@@ -262,7 +375,7 @@ class RainmanEngine:
         ref_lower = ref.lower()
         results = []
 
-        for m in self._memories:
+        for m in self._visible():
             # Check file_refs
             for fref in m.file_refs:
                 if ref_lower in fref.lower():
@@ -317,8 +430,45 @@ class RainmanEngine:
         self._memories = [m for m in self._memories if m.id != memory_id]
         if len(self._memories) < before:
             self.store.save_all(self._memories)
+            self.audit.record("forget", actor=current_actor(), memory_ids=[memory_id])
             return True
         return False
+
+    # ── Review queue (quarantined memories) ─────────────────────
+
+    def list_quarantined(self) -> List[Memory]:
+        """Memories held in quarantine awaiting review (see quarantine_ingest)."""
+        self._ensure_loaded()
+        return [m for m in self._memories if m.metadata.get("quarantined")]
+
+    def review_approve(self, memory_id: str) -> bool:
+        """Clear a memory's quarantine flag so it becomes recallable."""
+        self._ensure_loaded()
+        m = self._find_by_id(memory_id)
+        if not m or not m.metadata.get("quarantined"):
+            return False
+        m.metadata.pop("quarantined", None)
+        self.store.save_one(m)
+        self.audit.record(
+            "review_approve", actor=current_actor(),
+            memory_ids=[memory_id], source=m.source,
+        )
+        return True
+
+    def review_reject(self, memory_id: str) -> bool:
+        """Permanently drop a quarantined memory (rejected at review)."""
+        self._ensure_loaded()
+        m = self._find_by_id(memory_id)
+        if not m or not m.metadata.get("quarantined"):
+            return False
+        layer = m.layer
+        self._memories = [x for x in self._memories if x.id != memory_id]
+        self.store.save_layers(self._memories, {layer})
+        self.audit.record(
+            "review_reject", actor=current_actor(),
+            memory_ids=[memory_id], source=m.source,
+        )
+        return True
 
     def get_stats(self) -> Dict:
         """Return memory statistics."""

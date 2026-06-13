@@ -127,6 +127,24 @@ class TestInputValidation:
         assert result["isError"] is True
         assert "unknown" in result["content"][0]["text"].lower()
 
+    def test_internal_error_is_sanitized(self, server):
+        """An unexpected exception must not leak its message to the model."""
+        secret = "boom /secret/internal/path leaked"
+
+        def explode(*a, **k):
+            raise RuntimeError(secret)
+
+        server.engine.recall = explode
+        resp = _call(server, "tools/call", {
+            "name": "recall",
+            "arguments": {"query": "anything"},
+        })
+        result = resp["result"]
+        assert result["isError"] is True
+        text = result["content"][0]["text"]
+        assert secret not in text
+        assert "internal error" in text.lower()
+
 
 @pytest.mark.unit
 class TestHappyPath:

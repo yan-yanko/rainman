@@ -34,7 +34,8 @@ def main():
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:
-        print(f"[rainman] post_compact: failed to parse input: {e}", file=sys.stderr)
+        from rainman.core.log import get_logger
+        get_logger("hooks.post_compact").warning("failed to parse input: %s", e)
         hook_input = {}
 
     cwd = hook_input.get("cwd", os.getcwd())

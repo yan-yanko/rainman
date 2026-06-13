@@ -26,7 +26,10 @@ import sys
 from typing import Any, Dict, Optional
 
 from rainman.core.engine import RainmanEngine
+from rainman.core.log import get_logger
 
+
+log = get_logger(__name__)
 
 # MCP Protocol version
 PROTOCOL_VERSION = "2024-11-05"
@@ -239,8 +242,11 @@ class RainmanMCPServer:
 
             return {"content": [{"type": "text", "text": text}]}
 
-        except Exception as e:
-            return self._tool_error(str(e))
+        except Exception:
+            # Don't leak internals (paths, stack details) back to the model.
+            # Full diagnostics go to the server log only.
+            log.exception("tool %r failed", name)
+            return self._tool_error("internal error executing tool")
 
     def _tool_error(self, message: str) -> Dict:
         """Return a structured MCP tool error."""
@@ -256,7 +262,10 @@ class RainmanMCPServer:
         for i, r in enumerate(results, 1):
             m = r.memory
             lines.append(f"{i}. [{m.category}] {m.content}")
-            lines.append(f"   score={r.total_score:.3f} layer={m.layer} source={m.source}")
+            lines.append(
+                f"   score={r.total_score:.3f} layer={m.layer} "
+                f"trust={m.trust} source={m.source or 'unknown'}"
+            )
             if m.file_refs:
                 lines.append(f"   files: {', '.join(m.file_refs)}")
             if m.tags:

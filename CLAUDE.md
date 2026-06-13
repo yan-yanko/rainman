@@ -12,19 +12,26 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 143 tests across 9 files, <3s
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 205 tests across 16 files
 
 ## Architecture
 
 ```
 rainman/
   core/
-    models.py       Memory + RecallResult dataclasses
-    scoring.py      Keyword, temporal decay, importance, associative scoring (fixed weights)
+    models.py       Memory (+ author, .trust property) + RecallResult dataclasses
+    scoring.py      Keyword, temporal decay, importance, associative scoring + trust amplifier denial + quality prior
     sentiment.py    Keyword-based sentiment classifier (zero LLM)
-    engine.py       Core: add, recall, context, links, forget, persist
-    store.py        Layered JSON persistence (global + project) with file locking
-    redact.py       Secret redaction + path denylist for auto-learn safety
+    trust.py        Trust levels (user>hook>ingest) derived from source; quality prior
+    identity.py     current_actor() — local OS user / RAINMAN_AUTHOR
+    engine.py       Core: add, recall, context, links, forget, persist, retention, _visible()
+    store.py        JSON backend (default): layered persistence, file locking, fsync, schema_version
+    sqlite_store.py SQLite backend (opt-in): WAL, per-layer DB, no 2000-cap, indexed
+    storage.py      StorageBackend Protocol + make_store() backend factory
+    redact.py       Secret redaction + path denylist (+ org-policy extras) for auto-learn safety
+    audit.py        Append-only JSONL audit log (opt-in, batched) — store/recall/forget/retention
+    config.py       Policy control plane (org.enforce > project > user > org.defaults > builtin)
+    log.py          Structured stdlib logging (RAINMAN_LOG_LEVEL)
   mcp/
     server.py       MCP stdio server (JSON-RPC 2.0, 5 tools)
   cli/
@@ -34,19 +41,35 @@ rainman/
     post_compact.py    Legacy compaction hook (logging only; re-injection moved to session_start)
     post_tool_use.py   Auto-learn from file reads, edits, test runs
     session_end.py     Capture key decisions from conversation transcripts
+  sync/
+    client.py       SyncClient — push/pull project memories to a sync server (stdlib urllib)
   ingest/
     git.py          Parse git log into memories
     files.py        Scan project file tree into memories
   __main__.py       CLI entry point (argparse)
-tests/
-  test_scoring.py     22 scoring tests
-  test_engine.py      25 engine tests
-  test_sentiment.py   10 sentiment tests
-  test_hooks.py       28 hook tests (session_start, post_compact, post_tool_use, session_end)
-  test_mcp.py         18 MCP protocol tests
-  test_cli.py         11 CLI smoke tests
-  test_ingest.py      10 ingest tests
-  test_regressions.py  6 regression tests
+server/             SEPARATE package (rainman-server) — self-hosted sync server, stdlib-only
+  rainman_server/
+    db.py           SQLite store: workspaces, seq cursor, tokens, items + tombstones
+    app.py          ThreadingHTTPServer: /v1/health, /v1/workspaces/{ws}/pull|push (bearer auth)
+    __main__.py     `rainman_server serve` + `token add`
+tests/                  (181 tests total, all marked `unit`)
+  test_scoring.py     scoring components + weighted sum
+  test_engine.py      add / recall / context / links / forget
+  test_sentiment.py   sentiment classifier
+  test_hooks.py       session_start, post_compact, post_tool_use, session_end
+  test_mcp_server.py  MCP JSON-RPC protocol + tools (incl. error sanitization)
+  test_cli_smoke.py   CLI smoke
+  test_integration.py end-to-end layering
+  test_concurrency.py locking, corruption quarantine, fsync, schema version
+  test_regressions.py regression guards
+  test_trust.py       trust levels, amplifier denial, quality prior, floors (Ph1a)
+  test_audit.py       append-only audit log (Ph1b)
+  test_config.py      policy precedence + wired knobs (Ph1c)
+  test_retention.py   TTL prune + global-layer save safety (Ph1d)
+  test_review.py      quarantine review queue: approve/reject (Ph2c)
+  test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
+  test_sync.py        end-to-end sync over HTTP: push/pull/tombstone/auth (Ph2b)
+  conftest.py         adds server/ to sys.path for sync tests
 ```
 
 ## Data Model
@@ -112,7 +135,26 @@ rainman export                        # Dump all as JSON
 rainman serve                         # Start MCP stdio server
 rainman setup                         # Register hooks + MCP for Claude Code + VS Code
 rainman doctor                        # Self-diagnosis of installation health
+rainman review [approve|reject] <id>  # Review quarantined memories (Ph2c)
+rainman migrate --to sqlite|json      # Switch storage backend (Ph2a)
+rainman remote add <url> <ws> --token # Configure sync remote (Ph2b)
+rainman sync                          # Push + pull project memories (Ph2b)
 ```
+
+## Sync server (Phase 2b — separate `server/` package, stdlib-only)
+
+```bash
+python -m rainman_server serve --host 0.0.0.0 --port 8787 --db ./sync.db
+python -m rainman_server token add --user alice --workspace acme-api
+```
+
+Syncs the **project layer only** (global is personal). Monotonic-cursor delta
+protocol with tombstones; last-write-to-server-wins by `seq`. Bearer token per
+seat — stored in `~/.rainman/sync_credentials.json` or `RAINMAN_SYNC_TOKEN`,
+**never** the git-committable `.rainman/sync_state.json`. `sync` is push-then-pull
+(emit local tombstones before re-pulling). Client `pushed` map is the synced
+baseline, updated by both push AND pull (so pulled memories aren't re-uploaded
+and resurrected after another client deletes them). SessionStart auto-pulls.
 
 ## MCP Server — 5 Tools
 
@@ -139,15 +181,21 @@ Register: `claude mcp add rainman -- python -m rainman serve`
 
 ## Security
 
-- **Secret redaction:** Auto-learn (post_tool_use, session_end) runs content through `core/redact.py` before storing. Sensitive file paths (.env, *.pem, credentials*) are skipped entirely. Content patterns (AWS keys, GitHub tokens, API keys, PEM headers) are replaced with `[REDACTED]`.
+See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](SECURITY.md) for reporting + release integrity. Summary:
+
+- **Secret redaction:** Auto-learn (post_tool_use, session_end) runs content through `core/redact.py` before storing. Sensitive file paths (.env, *.pem, credentials*) are skipped entirely. Content patterns (AWS keys, GitHub tokens, API keys, PEM headers) are replaced with `[REDACTED]`. Org policy can add mandatory `extra_redaction_patterns` + `path_denylist`.
 - **No data leaves the machine.** Zero external API calls, zero network traffic.
-- **Prompt injection awareness:** Memory content from third-party sources (git commits, repo files) is stored verbatim — exercise caution with `rainman ingest` on untrusted repos.
+- **Trust levels (`core/trust.py`):** every memory has a level (`user` > `hook` > `ingest`) derived from `source`. Memory poisoning defense is **gating, not ranking** (attacker controls keyword content): ingest is held out of unsolicited auto-injection by default; ingest gets no rehearsal/associative amplifiers; `quarantine_ingest` policy can withhold ingested memories until reviewed. A small visible quality prior (`trust_prior`) only nudges ranking.
+- **Provenance:** `Memory.author` records the actor; trust + source shown on every injection.
+- **Audit log (`core/audit.py`):** opt-in append-only JSONL of store/recall/forget/retention with actor + timestamp.
+- **Policy plane (`core/config.py`):** `org.enforce > project > user > org.defaults > builtin`; `enforce` block = non-overridable org mandates.
 
 ## Hard Rules
 
 - **Zero external dependencies.** stdlib only. No pip install needed beyond setuptools.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the 130 existing tests.** Run `pip install -e . && pytest tests/ -m unit` before any change.
+- **Never break the existing tests (205 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/ server/`.
+- **Client stays stdlib-only forever.** The `server/` package is also stdlib-only today but is separate, so deps are *allowed* there if ever needed — never in `rainman/`.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
 - **Auto-link threshold: 0.25.** New memories auto-link to existing ones if keyword overlap >= 25%.

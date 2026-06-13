@@ -43,7 +43,14 @@ class Memory:
     source: str = ""                         # "git:abc123"|"cli"|"mcp"|"hook:post_tool_use"
     file_refs: List[str] = field(default_factory=list)    # files this memory relates to
     layer: str = "project"                   # "project" | "global"
+    author: str = ""                         # actor who created it (provenance)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def trust(self) -> str:
+        """Trust level derived from source: user | hook | ingest."""
+        from rainman.core.trust import trust_level
+        return trust_level(self.source)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -60,6 +67,7 @@ class Memory:
             "source": self.source,
             "file_refs": self.file_refs,
             "layer": self.layer,
+            "author": self.author,
             "metadata": self.metadata,
         }
 
@@ -79,6 +87,7 @@ class Memory:
             source=d.get("source", ""),
             file_refs=d.get("file_refs", []),
             layer=d.get("layer", "project"),
+            author=d.get("author", ""),
             metadata=d.get("metadata", {}),
         )
 
@@ -92,6 +101,7 @@ class RecallResult:
     recency_score: float = 0.0
     importance_score: float = 0.0
     associative_score: float = 0.0
+    trust_prior: float = 1.0   # quality-prior multiplier applied to total (tiebreaker)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -101,4 +111,6 @@ class RecallResult:
             "recency_score": round(self.recency_score, 4),
             "importance_score": round(self.importance_score, 4),
             "associative_score": round(self.associative_score, 4),
+            "trust": self.memory.trust,
+            "trust_prior": round(self.trust_prior, 4),
         }

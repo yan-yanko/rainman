@@ -94,7 +94,138 @@ def cmd_recall(
             print(f"   tags: {', '.join(m.tags)}")
         if m.file_refs:
             print(f"   files: {', '.join(m.file_refs)}")
-        print(f"   [{m.layer}] recalled {m.recall_count}x | {m.sentiment} | source: {m.source or 'unknown'}")
+        print(f"   [{m.layer}] recalled {m.recall_count}x | {m.sentiment} | "
+              f"trust: {m.trust} | source: {m.source or 'unknown'}"
+              + (f" | by {m.author}" if m.author else ""))
+
+
+def cmd_migrate(to: str, project_dir: Optional[str] = None) -> None:
+    """Migrate the store between backends (json <-> sqlite)."""
+    if to not in ("json", "sqlite"):
+        print("--to must be 'json' or 'sqlite'")
+        sys.exit(1)
+
+    # Resolve project dir (walk up for .rainman/).
+    engine = _get_engine(project_dir)
+    proj = engine.store._project_dir
+    root = os.path.dirname(proj) if proj else None
+    glob = engine.store.global_dir()
+
+    config_path = os.path.join(proj, "config.json") if proj else None
+    current = "json"
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                current = json.load(f).get("storage_backend", "json")
+        except (OSError, ValueError):
+            pass
+
+    if current == to:
+        print(f"Store is already using the '{to}' backend. Nothing to do.")
+        return
+
+    from rainman.core.storage import make_store
+
+    src = make_store(project_dir=root, global_dir=glob, backend=current)
+    dst = make_store(project_dir=root, global_dir=glob, backend=to)
+    dst.init_global()
+    if root:
+        dst.init_project(root)
+
+    memories = src.load_all()
+    dst.save_all(memories)
+
+    # Record the new backend in project config so policy/engine pick it up.
+    if config_path:
+        cfg = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except (OSError, ValueError):
+                cfg = {}
+        cfg["storage_backend"] = to
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+
+    print(f"Migrated {len(memories)} memories from '{current}' to '{to}' backend.")
+    print(f"Backend recorded in {config_path}")
+    if current == "json" and to == "sqlite":
+        print("Note: the old memories.json files are left in place; remove them once you've verified.")
+
+
+def cmd_remote(action: str, url: Optional[str] = None,
+               workspace: Optional[str] = None, token: Optional[str] = None) -> None:
+    """Configure the sync remote for this project."""
+    from rainman.sync import SyncClient, SyncError
+    engine = _get_engine()
+    try:
+        client = SyncClient(engine)
+    except SyncError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    if action == "add":
+        if not url or not workspace:
+            print("Usage: rainman remote add <url> <workspace> [--token <token>]")
+            sys.exit(1)
+        client.configure(remote=url, workspace=workspace, token=token)
+        print(f"Remote set: {url} (workspace: {workspace})")
+        if token:
+            print("Token stored in ~/.rainman/sync_credentials.json (not in the repo).")
+        else:
+            print("No token stored — set RAINMAN_SYNC_TOKEN before syncing.")
+    elif action == "show":
+        d = client.describe()
+        if not d["remote"]:
+            print("No remote configured.")
+            return
+        print(f"Remote:    {d['remote']}")
+        print(f"Workspace: {d['workspace']}")
+        print(f"Cursor:    {d['last_pull_seq']}")
+        print(f"Token:     {'present' if d['token_present'] else 'missing'}")
+
+
+def cmd_sync() -> None:
+    """Pull remote changes then push local ones."""
+    from rainman.sync import SyncClient, SyncError
+    engine = _get_engine()
+    try:
+        result = SyncClient(engine).sync()
+    except SyncError as e:
+        print(f"Sync failed: {e}")
+        sys.exit(1)
+    print(f"Synced: pulled {result['pulled']}, pushed {result['pushed']}, "
+          f"deleted {result['deleted']}")
+
+
+def cmd_review(action: Optional[str] = None, memory_id: Optional[str] = None) -> None:
+    """Review quarantined memories: list (default), approve, or reject."""
+    engine = _get_engine()
+
+    if action in ("approve", "reject"):
+        if not memory_id:
+            print(f"Usage: rainman review {action} <memory-id>")
+            sys.exit(1)
+        ok = (engine.review_approve(memory_id) if action == "approve"
+              else engine.review_reject(memory_id))
+        if ok:
+            print(f"{'Approved' if action == 'approve' else 'Rejected'} {memory_id}")
+        else:
+            print(f"No quarantined memory with id {memory_id}")
+            sys.exit(1)
+        return
+
+    pending = engine.list_quarantined()
+    if not pending:
+        print("No memories awaiting review.")
+        return
+    noun = "memory" if len(pending) == 1 else "memories"
+    print(f"{len(pending)} {noun} awaiting review:\n")
+    for m in pending:
+        print(f"  {m.id}  [{m.category}] trust:{m.trust} source:{m.source or 'unknown'}")
+        print(f"      {m.content[:140]}")
+    print("\nApprove: rainman review approve <id>   Reject: rainman review reject <id>")
 
 
 def cmd_status() -> None:

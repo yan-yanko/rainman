@@ -39,7 +39,8 @@ def main():
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:
-        print(f"[rainman] post_tool_use: failed to parse input: {e}", file=sys.stderr)
+        from rainman.core.log import get_logger
+        get_logger("hooks.post_tool_use").warning("failed to parse input: %s", e)
         sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")
@@ -49,6 +50,14 @@ def main():
     cwd = hook_input.get("cwd", os.getcwd())
     tool_input = hook_input.get("tool_input", {})
     tool_output = hook_input.get("tool_output", "")
+
+    from rainman.core.engine import RainmanEngine
+
+    engine = RainmanEngine(project_dir=cwd)
+
+    # Org policy: auto-learn can be disabled entirely.
+    if engine.policy.get("disable_auto_learn"):
+        sys.exit(0)
 
     # Extract learning based on tool type
     learning = _extract_learning(tool_name, tool_input, tool_output)
@@ -60,17 +69,18 @@ def main():
     if len(content) < MIN_CONTENT_LENGTH:
         sys.exit(0)
 
-    # Redact secrets before storing
+    # Redact secrets before storing (built-in rules + org-policy additions).
     from rainman.core.redact import safe_content
 
-    safe = safe_content(content, file_path=file_refs[0] if file_refs else None)
+    safe = safe_content(
+        content,
+        file_path=file_refs[0] if file_refs else None,
+        extra_patterns=engine.policy.get("extra_redaction_patterns"),
+        extra_path_denylist=engine.policy.get("path_denylist"),
+    )
     if safe is None:
         sys.exit(0)  # Sensitive file or content too redacted to be useful
     content = safe
-
-    from rainman.core.engine import RainmanEngine
-
-    engine = RainmanEngine(project_dir=cwd)
 
     # Dedup: refresh existing memory instead of creating duplicate
     if file_refs:

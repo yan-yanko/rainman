@@ -13,7 +13,7 @@ import threading
 import pytest
 
 from rainman.core.models import Memory
-from rainman.core.store import MemoryStore, LOCK_STALE_AGE
+from rainman.core.store import MemoryStore, LOCK_STALE_AGE, LOCK_TIMEOUT, SCHEMA_VERSION
 
 
 def _make_memory(mid, content="test", layer="project"):
@@ -130,6 +130,58 @@ class TestStaleLock:
 
         all_memories = store.load_all()
         assert any(m.id == "after_stale" for m in all_memories)
+
+
+    def test_live_lock_not_removed_on_timeout(self, tmp_path, monkeypatch):
+        """A fresh (non-stale) lock held by a live writer must survive a
+        timeout — clobbering it would let a competing writer corrupt the file."""
+        project_dir = str(tmp_path / "project")
+        os.makedirs(os.path.join(project_dir, ".rainman"), exist_ok=True)
+        memories_path = os.path.join(project_dir, ".rainman", "memories.json")
+        with open(memories_path, "w") as f:
+            json.dump([], f)
+
+        # Hold a *fresh* lock (not stale) for the whole acquire window.
+        lockfile = memories_path + ".lock"
+        with open(lockfile, "w") as f:
+            f.write("12345")
+        # Shrink the timeout so the test is fast.
+        monkeypatch.setattr("rainman.core.store.LOCK_TIMEOUT", 0.2)
+
+        store = MemoryStore(project_dir=project_dir, global_dir=str(tmp_path / "global"))
+        m = _make_memory("contended", "should not clobber the live lock")
+        with pytest.raises(TimeoutError):
+            store.save_one(m)
+
+        # The live lock must still be present — not force-removed.
+        assert os.path.exists(lockfile)
+
+
+@pytest.mark.unit
+class TestSchemaVersion:
+    """Schema version is stamped at init and readable for migrations."""
+
+    def test_init_stamps_schema_version(self, tmp_path):
+        project_dir = str(tmp_path / "project")
+        store = MemoryStore(project_dir=project_dir, global_dir=str(tmp_path / "global"))
+        store.init_project(project_dir)
+
+        config_path = os.path.join(project_dir, ".rainman", "config.json")
+        with open(config_path) as f:
+            config = json.load(f)
+        assert config["schema_version"] == SCHEMA_VERSION
+        assert store.schema_version("project") == SCHEMA_VERSION
+
+    def test_legacy_store_reports_none(self, tmp_path):
+        """A config without the key (pre-versioning store) returns None."""
+        project_dir = str(tmp_path / "project")
+        rainman_dir = os.path.join(project_dir, ".rainman")
+        os.makedirs(rainman_dir, exist_ok=True)
+        with open(os.path.join(rainman_dir, "config.json"), "w") as f:
+            json.dump({"version": "0.1.0"}, f)
+
+        store = MemoryStore(project_dir=project_dir, global_dir=str(tmp_path / "global"))
+        assert store.schema_version("project") is None
 
 
 @pytest.mark.unit

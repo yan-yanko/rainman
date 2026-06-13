@@ -65,6 +65,25 @@ def main():
     p_ingest.add_argument("--limit", "-n", type=int, default=50, help="Max git commits (default: 50)")
     p_ingest.add_argument("--depth", type=int, default=4, help="Max directory depth for files (default: 4)")
 
+    # migrate
+    p_migrate = sub.add_parser("migrate", help="Migrate store between backends (json <-> sqlite)")
+    p_migrate.add_argument("--to", required=True, choices=["json", "sqlite"], help="Target backend")
+
+    # remote
+    p_remote = sub.add_parser("remote", help="Configure the sync remote for this project")
+    p_remote.add_argument("action", choices=["add", "show"])
+    p_remote.add_argument("url", nargs="?", help="Sync server URL (for add)")
+    p_remote.add_argument("workspace", nargs="?", help="Workspace id (for add)")
+    p_remote.add_argument("--token", help="Per-seat bearer token (stored outside the repo)")
+
+    # sync
+    sub.add_parser("sync", help="Pull + push project memories with the sync server")
+
+    # review
+    p_review = sub.add_parser("review", help="Review quarantined memories (list/approve/reject)")
+    p_review.add_argument("action", nargs="?", choices=["list", "approve", "reject"], default="list")
+    p_review.add_argument("memory_id", nargs="?", help="Memory id (for approve/reject)")
+
     # setup
     sub.add_parser("setup", help="One-command setup: init + MCP + hooks")
 
@@ -84,7 +103,8 @@ def main():
     from rainman.cli.commands import (
         cmd_init, cmd_add, cmd_recall, cmd_status,
         cmd_links, cmd_export, cmd_context, cmd_ingest,
-        cmd_setup, cmd_doctor,
+        cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
+        cmd_remote, cmd_sync,
     )
 
     if args.command == "init":
@@ -109,6 +129,14 @@ def main():
         cmd_export()
     elif args.command == "ingest":
         cmd_ingest(git=args.git, files=args.files, limit=args.limit, depth=args.depth)
+    elif args.command == "migrate":
+        cmd_migrate(to=args.to)
+    elif args.command == "remote":
+        cmd_remote(action=args.action, url=args.url, workspace=args.workspace, token=args.token)
+    elif args.command == "sync":
+        cmd_sync()
+    elif args.command == "review":
+        cmd_review(action=args.action, memory_id=args.memory_id)
     elif args.command == "setup":
         cmd_setup()
     elif args.command == "doctor":
