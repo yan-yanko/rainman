@@ -164,20 +164,27 @@ def associative_score(
     reverse_index: Optional[Dict[str, set]] = None,
     entry: Optional[Memory] = None,
     trust_index: Optional[Dict[str, int]] = None,
+    forward_index: Optional[Dict[str, set]] = None,
+    max_hops: int = 1,
+    decay: float = 0.5,
 ) -> float:
     """
-    Graph-based associative boost.
+    Graph-based associative boost via bounded spreading activation (M4).
     Always on (was gated by Big Five openness in CogniTrait).
 
-    Checks if this entry is linked (via linked_ids) to any top-scoring entry.
-    Uses reverse_index when available to avoid O(n) scan.
+    Activation spreads from the top-scoring anchors through the link graph:
+    a memory directly linked to an anchor (1 hop) is boosted by 0.3 per anchor;
+    with ``max_hops >= 2`` a memory linked to *that* memory (2 hops from an
+    anchor) gets a ``decay``-attenuated share — so graph-connected knowledge
+    surfaces even with no direct link or keyword overlap (HippoRAG-style
+    diffusion, arXiv:2405.14831). Capped at 0.6. With ``max_hops == 1`` this is
+    exactly the original direct-neighbour boost.
 
     Trust restriction: when ``trust_index`` (id -> trust rank) is supplied,
     boost is NOT allowed to flow from a *higher-trust* anchor down to a
-    lower-trust entry. This stops a poisoned (low-trust) memory from riding
-    the credibility of curated knowledge it auto-linked itself to. Anchors of
-    equal-or-lower trust still count. When ``trust_index`` is None, no
-    restriction applies (preserves direct-call behavior).
+    lower-trust entry — a poisoned (low-trust) memory can't ride the
+    credibility of curated knowledge it auto-linked itself to. Applies at every
+    hop. When ``trust_index`` is None, no restriction applies.
     """
     # Use provided entry or fall back to O(n) lookup
     if entry is None:
@@ -198,30 +205,35 @@ def associative_score(
         entry_rank = trust_index.get(entry_id, trust.RANK[trust.USER])
         return trust_index.get(anchor_id, trust.RANK[trust.USER]) <= entry_rank
 
-    # Check forward links: entry -> top result
-    linked_to_top = sum(
-        1 for lid in entry.linked_ids if lid in top_set and _allowed(lid)
-    )
-
-    if linked_to_top == 0:
-        # Check reverse links: top result -> entry
-        if reverse_index is not None:
-            # O(1) lookup via inverted index
-            reverse_linkers = reverse_index.get(entry_id, set())
-            linked_to_top = sum(
-                1 for a in (reverse_linkers & top_set) if _allowed(a)
-            )
+    def _neighbors(mem_id: str, mem_obj: Optional[Memory] = None) -> set:
+        """Both-directions neighbours of a node in the link graph."""
+        if forward_index is not None:
+            fwd = set(forward_index.get(mem_id, ()))
+        elif mem_obj is not None:
+            fwd = set(mem_obj.linked_ids)
         else:
-            # Fallback: O(n) scan
-            for e in all_entries:
-                if e.id in top_set and entry_id in e.linked_ids and _allowed(e.id):
-                    linked_to_top += 1
+            fwd = set()
+        if reverse_index is not None:
+            rev = set(reverse_index.get(mem_id, ()))
+        else:
+            rev = {e.id for e in all_entries if mem_id in e.linked_ids}
+        return fwd | rev
 
-    if linked_to_top == 0:
-        return 0.0
+    # 1 hop: anchors directly adjacent to this entry.
+    entry_neighbors = _neighbors(entry_id, entry)
+    one_hop = {a for a in entry_neighbors if a in top_set and _allowed(a)}
+    score = 0.3 * len(one_hop)
 
-    # Cap at 0.6
-    return min(0.6, linked_to_top * 0.3)
+    # 2 hops: anchors adjacent to this entry's (non-anchor) neighbours.
+    if max_hops >= 2:
+        two_hop = set()
+        for mid in (entry_neighbors - top_set):
+            for a in _neighbors(mid):
+                if a in top_set and a not in one_hop and _allowed(a):
+                    two_hop.add(a)
+        score += 0.3 * decay * len(two_hop)
+
+    return min(0.6, score)
 
 
 def compute_score(
@@ -233,6 +245,8 @@ def compute_score(
     now: Optional[float] = None,
     trust_index: Optional[Dict[str, int]] = None,
     idf: Optional[Dict[str, float]] = None,
+    forward_index: Optional[Dict[str, set]] = None,
+    assoc_max_hops: int = 1,
 ) -> Dict[str, float]:
     """
     Full scoring pipeline. Returns component breakdown + total.
@@ -254,6 +268,8 @@ def compute_score(
             reverse_index=reverse_index,
             entry=entry,
             trust_index=trust_index,
+            forward_index=forward_index,
+            max_hops=assoc_max_hops,
         )
 
     weighted = (

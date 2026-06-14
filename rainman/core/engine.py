@@ -244,7 +244,7 @@ class RainmanEngine:
             importance=importance,
             category=category,
             sentiment=sentiment,
-            linked_ids=self._find_related(content),
+            linked_ids=self._find_related(content, tags=tags, file_refs=file_refs),
             tags=tags or [],
             source=source,
             file_refs=file_refs or [],
@@ -480,8 +480,9 @@ class RainmanEngine:
         initial.sort(key=lambda x: x[1]["total"], reverse=True)
         top_ids = [e.id for e, _ in initial[:limit]]
 
-        # Phase 2: Re-score with associative boost
+        # Phase 2: Re-score with associative boost (2-hop spreading activation)
         reverse_index = build_reverse_link_index(entries)
+        forward_index = {m.id: set(m.linked_ids) for m in entries}
         results = []
         for entry in entries:
             scores = compute_score(
@@ -492,6 +493,8 @@ class RainmanEngine:
                 now=now,
                 trust_index=trust_index,
                 idf=idf,
+                forward_index=forward_index,
+                assoc_max_hops=2,
             )
 
             total = scores["total"]
@@ -724,26 +727,58 @@ class RainmanEngine:
             base = min(1.0, base + 0.15)
         return base
 
-    def _find_related(self, content: str, max_links: int = 3) -> List[str]:
-        """Find related memories by keyword overlap."""
+    def _find_related(
+        self,
+        content: str,
+        max_links: int = 3,
+        tags: Optional[List[str]] = None,
+        file_refs: Optional[List[str]] = None,
+    ) -> List[str]:
+        """Find related memories for the associative graph (M3).
+
+        Upgrades the old last-100-window raw-token overlap to:
+        - **stemmed** tokens (so morphological variants link);
+        - **no window** — links can form against any historical memory;
+        - **IDF-weighted** overlap, so sharing a rare term (``saturation``)
+          links more strongly than sharing a common one (``the``);
+        - **typed edges** — sharing a file_ref or tag also creates a link, not
+          just content overlap.
+        """
         if not self._memories:
             return []
 
-        content_words = set(content.lower().split())
-        if len(content_words) < 2:
-            return []
+        new_tokens = set(tokenize(content))
+
+        # Tokenize each existing memory once; reuse for IDF and overlap.
+        existing = [(m, set(tokenize(m.content))) for m in self._memories]
+        idf = build_idf([
+            toks | set(tokenize_query(m.tags)) | set(tokenize_refs(m.file_refs))
+            for m, toks in existing
+        ])
+        default_w = max(idf.values()) if idf else 1.0
+
+        def weight(term: str) -> float:
+            return idf.get(term, default_w)
+
+        new_weight = sum(weight(t) for t in new_tokens) or 1.0
+        tagset = {t.lower() for t in (tags or [])}
+        ref_basenames = {
+            f.replace("\\", "/").split("/")[-1].lower() for f in (file_refs or [])
+        }
 
         scored = []
-        # Only check recent 100 for speed
-        for entry in self._memories[-100:]:
-            entry_words = set(entry.content.lower().split())
-            if not entry_words:
-                continue
-            overlap = len(content_words & entry_words) / max(
-                len(content_words), len(entry_words)
-            )
-            if overlap >= LINK_THRESHOLD:
-                scored.append((entry.id, overlap))
+        for entry, e_tokens in existing:
+            shared = new_tokens & e_tokens
+            score = (sum(weight(t) for t in shared) / new_weight) if new_tokens else 0.0
+            # Typed edges: shared file / tag links even without content overlap.
+            if ref_basenames and ref_basenames & {
+                f.replace("\\", "/").split("/")[-1].lower() for f in entry.file_refs
+            }:
+                score += 0.3
+            if tagset and tagset & {t.lower() for t in entry.tags}:
+                score += 0.3
+            if score >= LINK_THRESHOLD:
+                scored.append((entry.id, score))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return [eid for eid, _ in scored[:max_links]]
