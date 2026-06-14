@@ -35,6 +35,28 @@ WATCHED_TOOLS = {"Read", "Edit", "Write", "Bash"}
 MIN_CONTENT_LENGTH = 50
 
 
+def _coerce_output(resp) -> str:
+    """Normalize a PostToolUse tool result into searchable text.
+
+    Claude Code delivers the result as a string for some tools and a dict for
+    others (e.g. Bash → {"stdout", "stderr", ...}). Flatten either into text so
+    the learning extractors can scan it.
+    """
+    if not resp:
+        return ""
+    if isinstance(resp, str):
+        return resp
+    if isinstance(resp, dict):
+        for key in ("stdout", "output", "content", "result", "text", "stderr"):
+            val = resp.get(key)
+            if val:
+                return str(val)
+        return " ".join(str(v) for v in resp.values() if v)
+    if isinstance(resp, (list, tuple)):
+        return "\n".join(_coerce_output(x) for x in resp)
+    return str(resp)
+
+
 def main():
     try:
         hook_input = json.loads(sys.stdin.read())
@@ -49,7 +71,12 @@ def main():
 
     cwd = hook_input.get("cwd", os.getcwd())
     tool_input = hook_input.get("tool_input", {})
-    tool_output = hook_input.get("tool_output", "")
+    # Claude Code's PostToolUse payload carries the result under "tool_response".
+    # Fall back to the legacy "tool_output" key for older/compat payloads.
+    raw_output = hook_input.get("tool_response")
+    if raw_output is None:
+        raw_output = hook_input.get("tool_output", "")
+    tool_output = _coerce_output(raw_output)
 
     from rainman.core.engine import RainmanEngine
 

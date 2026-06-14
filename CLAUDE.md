@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 204 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 211 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -20,7 +20,9 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 rainman/
   core/
     models.py       Memory (+ author, .trust property) + RecallResult dataclasses
-    scoring.py      Keyword, temporal decay, importance, associative scoring + trust amplifier denial + quality prior
+    scoring.py      IDF-weighted (stemmed) keyword, temporal decay, importance, associative scoring + trust amplifier denial + quality prior
+    text.py         Tokenization: stem + stopword filter + IDF index (shared by scorer)
+    porter.py       Vendored public-domain Porter stemmer (stdlib, zero-dep)
     sentiment.py    Keyword-based sentiment classifier (zero LLM)
     trust.py        Trust levels (user>hook>ingest) derived from source; quality prior
     identity.py     current_actor() — local OS user / RAINMAN_AUTHOR
@@ -54,7 +56,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (204 tests total, all marked `unit`)
+tests/                  (211 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -71,6 +73,7 @@ tests/                  (204 tests total, all marked `unit`)
   test_review.py      quarantine review queue: approve/reject (Ph2c)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync_client.py client-side sync: config/token-safety, push/pull apply (mocked HTTP)
+  test_retrieval_quality.py  IR gate: recall@5/MRR on paraphrased queries + relevance floor
 ```
 (Server-side + client<->server integration tests live in the rainman-server repo.)
 
@@ -98,14 +101,18 @@ Memory:
 
 | Component | Weight | Description |
 |-----------|--------|-------------|
-| keyword | 0.35 | Keyword overlap (content + tags + file_refs) + rehearsal boost (capped at 2x) |
+| keyword | 0.35 | IDF-weighted overlap over a Porter-stemmed, stopword-filtered, punctuation-robust token index (content + tags + file_refs), normalized to [0,1] + rehearsal boost (capped at 2x) |
 | recency | 0.25 | ACT-R power-law decay, 14-day half-life (rehearsal capped at 2.5x) |
 | importance | 0.20 | Category-based (failure=0.9, solution=0.8, decision=0.7) + keyword boost |
 | associative | 0.20 | Graph boost: memories linked to top-scoring results get boosted |
 
+Stemming collapses morphology (`authenticate`/`authentication`); IDF makes rare terms outweigh common ones (BM25's term-weighting principle); stopword removal stops natural-language queries being diluted. Lexical matching does NOT cover synonyms/abbreviations (`auth`≠`authentication`) — that is the planned optional semantic lane, not the stdlib core.
+
 Two-phase retrieval:
 1. Score without associative boost -> find top-K
 2. Re-score with associative boost using top-K as anchors
+
+**Relevance floor:** with a real query, a memory with zero keyword AND zero associative signal is dropped rather than surfaced on recency alone (`recall(require_relevance=True)`, the default) — confident noise is worse than nothing. Retrieval quality is gated by `tests/test_retrieval_quality.py` (recall@5 / MRR on paraphrased queries).
 
 Project memories get 1.2x boost over global memories.
 
@@ -196,12 +203,12 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (204 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (211 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
 - **Auto-link threshold: 0.25.** New memories auto-link to existing ones if keyword overlap >= 25%.
-- **Max memories: 2000.** Auto-prune drops lowest-importance + oldest when exceeded.
+- **Max memories: 2000.** Auto-prune drops lowest-importance + oldest when exceeded. When `add()` triggers a prune it persists via `save_all()` (full layer rewrite) so eviction reaches disk — `save_one()` would re-merge the full file and leave evicted entries behind (unbounded growth).
 - **Sentiment is keyword-based.** Uses 6 categories with developer-specific terms (frustrated, stuck, regression, hack).
 - **Rehearsal caps.** Keyword boost capped at 2x, recency boost at 2.5x (10 recalls max effect).
 

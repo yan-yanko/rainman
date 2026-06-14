@@ -72,7 +72,7 @@ class TestPostToolUse:
             "tool_name": "Read",
             "cwd": project,
             "tool_input": {"file_path": "services/api/auth.py"},
-            "tool_output": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        # Uses Redis cache for session tokens\n        pass\n" * 5,
+            "tool_response": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        # Uses Redis cache for session tokens\n        pass\n" * 5,
         }
         result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
         assert result.returncode == 0
@@ -107,7 +107,7 @@ class TestPostToolUse:
             "cwd": project,
             "tool_input": {"command": "pytest tests/test_auth.py tests/test_login.py -x --verbose"},
             # Note: output must NOT contain "passed" — hook checks passed before failed
-            "tool_output": "FAILED tests/test_auth.py::test_login_with_expired_token - AssertionError: expected 200 got 401 for user auth endpoint\n1 failed in 2.34s",
+            "tool_response": "FAILED tests/test_auth.py::test_login_with_expired_token - AssertionError: expected 200 got 401 for user auth endpoint\n1 failed in 2.34s",
         }
         result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
         assert result.returncode == 0
@@ -122,7 +122,7 @@ class TestPostToolUse:
             "tool_name": "Bash",
             "cwd": project,
             "tool_input": {"command": "pytest tests/test_auth.py tests/test_login.py tests/test_session.py -q --verbose"},
-            "tool_output": "6 passed in 0.08s. All tests passed successfully. No warnings.",
+            "tool_response": "6 passed in 0.08s. All tests passed successfully. No warnings.",
         }
         result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
         assert result.returncode == 0
@@ -166,7 +166,7 @@ class TestPostToolUse:
             "tool_name": "Read",
             "cwd": project,
             "tool_input": {"file_path": "services/api/auth.py"},
-            "tool_output": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        pass\n" * 5,
+            "tool_response": "class PaymentServiceController:\n    def process_payment(self, amount, currency):\n        pass\n" * 5,
         }
         # First call
         _run_hook("rainman.hooks.post_tool_use", hook_input, project)
@@ -175,6 +175,40 @@ class TestPostToolUse:
 
         memories = _load_memories(project)
         assert len(memories) == 1  # Dedup should prevent second entry
+
+    def test_legacy_tool_output_fallback(self, project_dir):
+        """Older payloads used 'tool_output'; the hook must still read it."""
+        project, global_dir = project_dir
+        hook_input = {
+            "tool_name": "Bash",
+            "cwd": project,
+            "tool_input": {"command": "pytest tests/test_legacy.py -q"},
+            "tool_output": "FAILED tests/test_legacy.py::test_thing - boom in the parser\n1 failed in 0.5s",
+        }
+        result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
+        assert result.returncode == 0
+        memories = _load_memories(project)
+        assert len(memories) == 1
+        assert memories[0]["category"] == "failure"
+
+    def test_dict_tool_response_coerced(self, project_dir):
+        """Claude Code delivers some results as a dict (e.g. Bash stdout/stderr);
+        the hook must flatten it to text, not stringify the whole dict away."""
+        project, global_dir = project_dir
+        hook_input = {
+            "tool_name": "Bash",
+            "cwd": project,
+            "tool_input": {"command": "pytest tests/test_api.py tests/test_payments.py tests/test_users.py -q"},
+            "tool_response": {
+                "stdout": "12 passed in 1.2s. all checks succeeded cleanly",
+                "stderr": "",
+            },
+        }
+        result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
+        assert result.returncode == 0
+        memories = _load_memories(project)
+        assert len(memories) == 1
+        assert "succeeded" in memories[0]["content"].lower()
 
     def test_malformed_json_exits_cleanly(self, project_dir):
         project, global_dir = project_dir

@@ -28,6 +28,12 @@ from rainman.core.scoring import (
     CATEGORY_IMPORTANCE,
     IMPORTANCE_KEYWORDS,
 )
+from rainman.core.text import (
+    build_idf,
+    tokenize,
+    tokenize_query,
+    tokenize_refs,
+)
 from rainman.core.store import GLOBAL_DIR
 from rainman.core.storage import make_store
 
@@ -206,11 +212,21 @@ class RainmanEngine:
 
         self._memories.append(memory)
 
-        # Prune if over limit
+        # Prune if over limit. When prune evicts entries the whole layer must be
+        # rewritten: save_one() does a read-modify-write that re-merges the full
+        # on-disk file and appends, so it would leave the evicted memories on
+        # disk forever (the in-memory 2000-cap would silently diverge from an
+        # ever-growing file). save_all() rewrites both layers from the pruned
+        # set, so eviction actually reaches disk.
+        pruned = False
         if len(self._memories) > MAX_MEMORIES:
             self._prune()
+            pruned = True
 
-        self.store.save_one(memory)
+        if pruned:
+            self.store.save_all(self._memories)
+        else:
+            self.store.save_one(memory)
         self.audit.record(
             "store", actor=author, memory_ids=[memory.id],
             source=source, layer=layer, category=category,
@@ -223,6 +239,7 @@ class RainmanEngine:
         limit: int = 5,
         category: Optional[str] = None,
         min_trust=_UNSET,
+        require_relevance: bool = True,
     ) -> List[RecallResult]:
         """
         Context-aware retrieval. Two-phase scoring with associative boost.
@@ -233,9 +250,16 @@ class RainmanEngine:
         quality prior that only nudges ranking. When omitted, the org policy's
         ``recall_min_trust`` applies (default: no gate); pass None to force no
         gate regardless of policy.
+
+        ``require_relevance`` (default True) applies a relevance FLOOR: when a
+        query is given, a memory with no query signal at all (zero keyword AND
+        zero associative score) is dropped rather than surfaced on recency
+        alone. This stops an irrelevant-but-recent memory from being injected
+        into the agent's context — confident noise is worse than nothing. Pass
+        False to keep the old "always return the top-N by score" behavior.
         """
         self._ensure_loaded()
-        query_words = query.lower().split()
+        query_words = query.split()
 
         if not self._memories:
             return []
@@ -259,10 +283,19 @@ class RainmanEngine:
         # higher-trust anchor down to a lower-trust entry).
         trust_index = {m.id: trust.trust_rank(m.source) for m in entries}
 
+        # IDF over the candidate corpus — rare, meaningful terms outweigh common
+        # ones (BM25's term-weighting principle). Built once per recall.
+        idf = build_idf([
+            set(tokenize(m.content))
+            | set(tokenize_query(m.tags))
+            | set(tokenize_refs(m.file_refs))
+            for m in entries
+        ])
+
         # Phase 1: Score without associative boost
         initial = []
         for entry in entries:
-            scores = compute_score(entry, query_words, now=now)
+            scores = compute_score(entry, query_words, now=now, idf=idf)
             initial.append((entry, scores))
 
         initial.sort(key=lambda x: x[1]["total"], reverse=True)
@@ -279,6 +312,7 @@ class RainmanEngine:
                 reverse_index=reverse_index,
                 now=now,
                 trust_index=trust_index,
+                idf=idf,
             )
 
             total = scores["total"]
@@ -297,6 +331,18 @@ class RainmanEngine:
                 trust_prior=scores["trust_prior"],
             )
             results.append(result)
+
+        # Relevance floor: with a real query, drop memories that have no query
+        # signal at all (no keyword overlap and no associative link to a top
+        # result). They would otherwise rank on recency/importance alone and
+        # inject confident noise. Skipped when the query is empty/all-stopwords
+        # (nothing to be relevant to) or when the caller opts out.
+        if require_relevance and tokenize_query(query_words):
+            filtered = [
+                r for r in results
+                if r.keyword_score > 0.0 or r.associative_score > 0.0
+            ]
+            results = filtered
 
         results.sort(key=lambda r: r.total_score, reverse=True)
 

@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 
 from rainman.core.models import Memory
 from rainman.core import trust
+from rainman.core.text import tokenize, tokenize_query, tokenize_refs
 
 
 # Fixed scoring weights (no personality modulation)
@@ -47,28 +48,49 @@ IMPORTANCE_KEYWORDS = {
 }
 
 
-def keyword_score(entry: Memory, query_words: List[str]) -> float:
+def keyword_score(
+    entry: Memory,
+    query_words: List[str],
+    idf: Optional[Dict[str, float]] = None,
+) -> float:
     """
-    Keyword overlap between query and memory content.
-    Boosted by recall count (rehearsal effect from ACT-R).
-    Also checks tags and file_refs for matches.
+    IDF-weighted lexical overlap between query and memory, over a stemmed,
+    punctuation-robust, stopword-filtered token index (content + tags +
+    file_refs). Boosted by recall count (rehearsal effect from ACT-R).
+
+    This applies BM25's term-weighting principle: each query term contributes
+    its inverse-document-frequency weight, so a rare, meaningful term
+    (``saturation``) counts far more than a common one (``bug``). When ``idf``
+    is omitted (direct calls / no corpus), every term weighs equally and the
+    score degenerates to plain stemmed coverage.
+
+    The result is normalized to ``matched_weight / query_weight`` in [0, 1]
+    before the rehearsal multiplier, preserving the weighted-sum contract.
+    Stemming collapses morphology (``authenticate``/``authentication``);
+    tokenization fixes punctuation asymmetry (``queries.`` vs ``queries``);
+    stopword removal stops natural-language queries from being diluted.
     """
     if not query_words:
         return 0.0
 
-    content_words = set(entry.content.lower().split())
-    tag_words = {t.lower() for t in entry.tags}
-    ref_words = set()
-    for ref in entry.file_refs:
-        # "engine/election/predictor.py" -> {"engine", "election", "predictor", "py", "predictor.py"}
-        parts = ref.replace("\\", "/").replace("/", " ").replace(".", " ").lower().split()
-        ref_words.update(parts)
-        # Also add the full filename
-        ref_words.add(ref.replace("\\", "/").split("/")[-1].lower())
+    query_terms = set(tokenize_query(query_words))
+    if not query_terms:
+        return 0.0
 
-    all_words = content_words | tag_words | ref_words
-    matched = sum(1 for w in query_words if w in all_words)
-    overlap = matched / len(query_words)
+    all_words = set(tokenize(entry.content))
+    all_words.update(tokenize_query(entry.tags))
+    all_words.update(tokenize_refs(entry.file_refs))
+
+    def _w(term: str) -> float:
+        # Unseen-in-corpus terms never match a doc, so their weight only sits
+        # in the (per-query constant) denominator and never affects ranking.
+        return 1.0 if idf is None else idf.get(term, 1.0)
+
+    query_weight = sum(_w(t) for t in query_terms)
+    if query_weight == 0:
+        return 0.0
+    matched_weight = sum(_w(t) for t in query_terms if t in all_words)
+    overlap = matched_weight / query_weight
 
     # Rehearsal boost (ACT-R: frequently recalled memories strengthen)
     # Capped to prevent rich-get-richer: max 2x at 10+ recalls.
@@ -210,6 +232,7 @@ def compute_score(
     reverse_index: Optional[Dict[str, set]] = None,
     now: Optional[float] = None,
     trust_index: Optional[Dict[str, int]] = None,
+    idf: Optional[Dict[str, float]] = None,
 ) -> Dict[str, float]:
     """
     Full scoring pipeline. Returns component breakdown + total.
@@ -220,7 +243,7 @@ def compute_score(
     auto-learned/ingested memories down as a tiebreaker, never as a security
     boundary (see core/trust.py).
     """
-    kw = keyword_score(entry, query_words)
+    kw = keyword_score(entry, query_words, idf=idf)
     rec = temporal_decay(entry, now=now)
     imp = importance_boost(entry)
 

@@ -102,6 +102,50 @@ class TestPruningFix:
         ids = {m.id for m in e._memories}
         assert "rm_oldest_low" not in ids  # Should have been pruned
 
+    def test_prune_propagates_to_disk(self, tmp_path):
+        """Pruning must shrink the on-disk file, not just the in-memory list.
+
+        Regression for the unbounded-growth bug: the default add() path persists
+        via save_one() (read-modify-write the full file + append), so a prune
+        that only mutated self._memories left the evicted entries on disk and
+        the file grew forever. After the fix, add()-triggered prune rewrites the
+        layer, so disk stays capped at MAX_MEMORIES.
+        """
+        project = str(tmp_path / "project")
+        global_dir = str(tmp_path / "global")
+        os.makedirs(project)
+        os.makedirs(global_dir)
+        e = RainmanEngine(project_dir=project, global_dir=global_dir)
+        e.store.init_project(project)
+        e.store.init_global()
+
+        now = time.time()
+        e._memories = [
+            Memory(
+                id=f"rm_pre_{i}",
+                content=f"memory number {i}",
+                timestamp=now - (MAX_MEMORIES - i),
+                importance=0.5,
+                category="note",
+                layer="project",
+            )
+            for i in range(MAX_MEMORIES)
+        ]
+        e._loaded = True
+        e.store.save_all(e._memories)
+
+        # Sanity: disk holds exactly MAX before overflow.
+        fresh_before = RainmanEngine(project_dir=project, global_dir=global_dir)
+        assert len(fresh_before.store.load_all()) == MAX_MEMORIES
+
+        # Overflow the cap several times via the normal add() path.
+        for i in range(5):
+            e.add(f"overflowing memory entry number {i} with sufficient length")
+
+        # Disk must still hold MAX — not MAX + 5 (the old bug).
+        fresh_after = RainmanEngine(project_dir=project, global_dir=global_dir)
+        assert len(fresh_after.store.load_all()) == MAX_MEMORIES
+
 
 # ── Fix 2: Write amplification — recall only saves affected layers ──
 

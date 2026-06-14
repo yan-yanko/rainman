@@ -256,7 +256,7 @@ tests/
   test_concurrency.py Concurrency, corruption, input validation tests
 ```
 
-143 unit tests. Zero external dependencies. <3s test suite. CI runs `ruff check` + `pytest` on Python 3.10/3.11/3.12.
+211 unit tests (incl. a recall@5/MRR retrieval-quality gate). Zero external dependencies. CI runs `ruff check` + `pytest` on Python 3.10/3.11/3.12.
 
 ## CLI Reference
 
@@ -293,9 +293,12 @@ The core algorithms (ACT-R temporal decay, keyword scoring, associative linking)
 ## Security
 
 Rainman is local-first by design: **no data leaves your machine** — zero
-external API calls, zero telemetry, zero runtime dependencies. Secrets are
-redacted before storage, and third-party content (`rainman ingest`, auto-learn)
-is trust-tagged and held out of unsolicited context injection by default.
+external API calls, zero telemetry, zero runtime dependencies. (The only
+network path is the *opt-in* team-sync client, which talks to a server **you**
+run after you explicitly configure a remote; the core is fully offline and the
+global layer never leaves your machine.) Secrets are redacted before storage,
+and third-party content (`rainman ingest`, auto-learn) is trust-tagged and held
+out of unsolicited context injection by default.
 
 Memory-poisoning defense is **gating, not ranking**. For the full model see
 [`THREAT_MODEL.md`](THREAT_MODEL.md); for reporting and release verification see
