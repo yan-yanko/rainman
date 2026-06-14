@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 229 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 235 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -57,7 +57,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (229 tests total, all marked `unit`)
+tests/                  (235 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -117,6 +117,8 @@ Two-phase retrieval:
 
 **Relevance floor:** with a real query, a memory with zero keyword AND zero associative signal is dropped rather than surfaced on recency alone (`recall(require_relevance=True)`, the default) — confident noise is worse than nothing. Retrieval quality is gated by `tests/test_retrieval_quality.py` (recall@5 / MRR on paraphrased queries).
 
+**Task-state conditioning (M2):** `recall(query, context_files=[...], error_signature=...)` boosts memories whose stored `file_refs` match a file currently in play, or whose content / experience-card `problem` matches the current error (IDF-weighted), up to `1 + TASK_AFFINITY_BOOST`. Task-matched memories also pass the relevance floor with no lexical overlap — so the fix for *this* error in *this* file surfaces regardless of query wording. The MCP `recall` tool exposes `files` + `error`. The query may be empty to condition purely on task state.
+
 Project memories get 1.2x boost over global memories.
 
 Rehearsal multipliers are capped (keyword: max 2x at 10+ recalls, recency: max 2.5x) to prevent rich-get-richer degradation over time.
@@ -172,7 +174,7 @@ Client sync contract worth knowing:
 
 | Tool | Description |
 |------|-------------|
-| recall | Search memories (ALWAYS before declaring a problem unsolvable) |
+| recall | Search memories (ALWAYS before declaring a problem unsolvable); optional `files`/`error` args condition on current task state |
 | remember | Store a new learning |
 | context | Get current working context |
 | links | Show memories linked to a file or concept |
@@ -206,7 +208,7 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (229 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (235 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.

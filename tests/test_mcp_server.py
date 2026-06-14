@@ -173,6 +173,29 @@ class TestHappyPath:
         assert "auth" in text
         assert "pattern" in text
 
+    def test_recall_with_task_state_args(self, server):
+        """The recall tool accepts files/error and surfaces the task-relevant
+        memory even when the query doesn't lexically match it."""
+        _call(server, "tools/call", {
+            "name": "remember",
+            "arguments": {
+                "content": "the retry loop here floods the gateway under load",
+                "category": "failure",
+                "file_refs": ["src/net/client.py"],
+            },
+        })
+        resp = _call(server, "tools/call", {
+            "name": "recall",
+            "arguments": {
+                "query": "unrelated phrasing",
+                "files": ["src/net/client.py"],
+            },
+        })
+        result = resp["result"]
+        assert "isError" not in result or result["isError"] is False
+        text = result["content"][0]["text"]
+        assert "retry loop" in text
+
     def test_context_empty_store(self, server):
         resp = _call(server, "tools/call", {
             "name": "context",

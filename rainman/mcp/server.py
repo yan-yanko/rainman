@@ -60,6 +60,22 @@ TOOLS = [
                     "description": "Filter by category",
                     "enum": ["pattern", "solution", "failure", "decision", "convention", "note"],
                 },
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Files you're currently working on. Memories about these files "
+                        "(esp. past failures/fixes) are surfaced even if the query doesn't "
+                        "lexically match them."
+                    ),
+                },
+                "error": {
+                    "type": "string",
+                    "description": (
+                        "A recent error message / stack trace. Surfaces the experience card "
+                        "for this exact failure if one was captured before."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -203,10 +219,15 @@ class RainmanMCPServer:
                     return self._tool_error("recall requires 'query' argument")
                 query = str(args["query"])[:500]
                 limit = max(1, min(50, int(args.get("limit", 5))))
+                raw_files = args.get("files") or []
+                context_files = [str(f)[:500] for f in raw_files[:20]] if isinstance(raw_files, list) else None
+                error_signature = str(args["error"])[:1000] if args.get("error") else None
                 results = self.engine.recall(
                     query=query,
                     limit=limit,
                     category=args.get("category"),
+                    context_files=context_files or None,
+                    error_signature=error_signature,
                 )
                 text = self._format_recall(results)
 

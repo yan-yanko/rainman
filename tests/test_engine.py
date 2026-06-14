@@ -112,6 +112,58 @@ class TestRecall:
 
 
 @pytest.mark.unit
+class TestTaskConditionedRecall:
+    """M2: recall steered by current task state (open file + error signature)."""
+
+    def test_file_affinity_boosts_matching_memory(self, engine):
+        engine.add("connection handling logic lives here", file_refs=["src/net/client.py"])
+        engine.add("connection handling logic lives here too", file_refs=["src/other.py"])
+        # Same query; the memory tied to the current file should win.
+        results = engine.recall("connection handling", context_files=["src/net/client.py"])
+        assert results[0].memory.file_refs == ["src/net/client.py"]
+        assert results[0].task_affinity > 0.0
+
+    def test_error_signature_surfaces_experience_card(self, engine):
+        # An experience card whose problem matches an error...
+        failure = engine.record_failure(
+            "ConnectionResetError: peer reset during TLS handshake on the socket",
+            file_refs=["src/net/client.py"],
+        )
+        # ...plus an unrelated but lexically-queryable memory.
+        engine.add("notes on the deployment checklist and release cadence", category="note")
+
+        # Query words don't match the card; the error signature does.
+        results = engine.recall(
+            "deployment checklist",
+            error_signature="ConnectionResetError peer reset TLS handshake socket",
+        )
+        ids = [r.memory.id for r in results]
+        assert failure.id in ids  # surfaced purely via error affinity
+        card = next(r for r in results if r.memory.id == failure.id)
+        assert card.task_affinity > 0.0
+
+    def test_task_match_passes_relevance_floor(self, engine):
+        # Zero lexical overlap with the query, but references the current file.
+        engine.add("arbitrary content with no query words", file_refs=["src/net/client.py"])
+        results = engine.recall("xyzzy nonsense", context_files=["src/net/client.py"])
+        assert len(results) == 1
+        assert results[0].task_affinity > 0.0
+
+    def test_empty_query_with_task_state_returns_only_affine(self, engine):
+        engine.add("relevant to the open file", file_refs=["src/net/client.py"])
+        engine.add("unrelated recent memory about something else", file_refs=["src/zzz.py"])
+        results = engine.recall("", context_files=["src/net/client.py"])
+        assert len(results) == 1
+        assert results[0].memory.file_refs == ["src/net/client.py"]
+
+    def test_no_task_state_is_unchanged(self, engine):
+        engine.add("rate-limit bug in the api gateway", category="failure")
+        plain = engine.recall("rate-limit api")
+        assert len(plain) >= 1
+        assert all(r.task_affinity == 0.0 for r in plain)
+
+
+@pytest.mark.unit
 class TestContext:
 
     def test_context_returns_recent(self, engine):

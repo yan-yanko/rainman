@@ -102,6 +102,7 @@ class RecallResult:
     importance_score: float = 0.0
     associative_score: float = 0.0
     trust_prior: float = 1.0   # quality-prior multiplier applied to total (tiebreaker)
+    task_affinity: float = 0.0  # task-state match (current file / error signature), 0-1
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -113,4 +114,5 @@ class RecallResult:
             "associative_score": round(self.associative_score, 4),
             "trust": self.memory.trust,
             "trust_prior": round(self.trust_prior, 4),
+            "task_affinity": round(self.task_affinity, 4),
         }

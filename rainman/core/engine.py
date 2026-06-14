@@ -50,6 +50,12 @@ MAX_FILE_REF_LENGTH = 500
 # Project-layer boost on recall (local knowledge is more relevant)
 PROJECT_BOOST = 1.2
 
+# Multiplier applied to a memory whose stored files / problem match the CURRENT
+# task state (open file, recent error). Up to +TASK_AFFINITY_BOOST x at affinity
+# 1.0 — surfaces the experience card for *this* file/error even when the
+# free-text query doesn't lexically match it.
+TASK_AFFINITY_BOOST = 0.8
+
 # Auto-linking threshold (keyword overlap)
 LINK_THRESHOLD = 0.25
 
@@ -344,10 +350,21 @@ class RainmanEngine:
         category: Optional[str] = None,
         min_trust=_UNSET,
         require_relevance: bool = True,
+        context_files: Optional[List[str]] = None,
+        error_signature: Optional[str] = None,
     ) -> List[RecallResult]:
         """
         Context-aware retrieval. Two-phase scoring with associative boost.
         Project memories get 1.2x boost over global.
+
+        Task-state conditioning (M2): ``context_files`` (files currently being
+        worked on) and ``error_signature`` (a recent error / stack trace) steer
+        retrieval toward the memory for *this* situation. A memory referencing a
+        current file, or whose experience-card ``problem`` matches the error, is
+        boosted and is allowed past the relevance floor even with no lexical
+        query overlap — so the fix for "this exact error in this exact file"
+        surfaces regardless of how the query is phrased. The query may be empty
+        when conditioning purely on task state.
 
         ``min_trust`` (one of trust.USER/HOOK/INGEST) gates out memories below
         that trust level entirely — a security control, distinct from the
@@ -396,6 +413,13 @@ class RainmanEngine:
             for m in entries
         ])
 
+        # Task state (M2): basenames of the current files + stemmed error terms.
+        task_basenames = {
+            f.replace("\\", "/").split("/")[-1].lower()
+            for f in (context_files or [])
+        }
+        error_terms = set(tokenize(error_signature)) if error_signature else set()
+
         # Phase 1: Score without associative boost
         initial = []
         for entry in entries:
@@ -425,6 +449,11 @@ class RainmanEngine:
             if entry.layer == "project":
                 total *= PROJECT_BOOST
 
+            # Task-state affinity boost (current file / error signature).
+            affinity = self._task_affinity(entry, task_basenames, error_terms, idf)
+            if affinity > 0:
+                total *= (1 + TASK_AFFINITY_BOOST * affinity)
+
             result = RecallResult(
                 memory=entry,
                 total_score=total,
@@ -433,20 +462,25 @@ class RainmanEngine:
                 importance_score=scores["importance"],
                 associative_score=scores["associative"],
                 trust_prior=scores["trust_prior"],
+                task_affinity=affinity,
             )
             results.append(result)
 
-        # Relevance floor: with a real query, drop memories that have no query
-        # signal at all (no keyword overlap and no associative link to a top
-        # result). They would otherwise rank on recency/importance alone and
-        # inject confident noise. Skipped when the query is empty/all-stopwords
-        # (nothing to be relevant to) or when the caller opts out.
-        if require_relevance and tokenize_query(query_words):
-            filtered = [
+        # Relevance floor: drop memories with no relevance signal at all — no
+        # keyword overlap, no associative link to a top result, AND no task-state
+        # match. They would otherwise rank on recency/importance alone and inject
+        # confident noise. The floor fires when there is something to be relevant
+        # to: a real query OR task state. Skipped when the caller opts out, or
+        # when neither is present (then recall degenerates to context-like).
+        has_query = bool(tokenize_query(query_words))
+        has_task = bool(task_basenames or error_terms)
+        if require_relevance and (has_query or has_task):
+            results = [
                 r for r in results
-                if r.keyword_score > 0.0 or r.associative_score > 0.0
+                if r.keyword_score > 0.0
+                or r.associative_score > 0.0
+                or r.task_affinity > 0.0
             ]
-            results = filtered
 
         results.sort(key=lambda r: r.total_score, reverse=True)
 
@@ -662,6 +696,37 @@ class RainmanEngine:
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return [eid for eid, _ in scored[:max_links]]
+
+    def _task_affinity(self, entry, task_basenames, error_terms, idf) -> float:
+        """How well a memory matches the CURRENT task state, in [0, 1].
+
+        Two signals: (1) the memory references a file currently in play; (2) the
+        current error signature overlaps the memory's content or its
+        experience-card ``problem`` (IDF-weighted, so a rare error token counts
+        more than a common word). This is what lets the fix for *this* error in
+        *this* file surface even when the free-text query doesn't match it.
+        """
+        score = 0.0
+
+        if task_basenames and entry.file_refs:
+            entry_basenames = {
+                f.replace("\\", "/").split("/")[-1].lower() for f in entry.file_refs
+            }
+            if entry_basenames & task_basenames:
+                score += 0.6
+
+        if error_terms:
+            entry_terms = set(tokenize(entry.content))
+            exp = entry.metadata.get("experience") if entry.metadata else None
+            if isinstance(exp, dict) and exp.get("problem"):
+                entry_terms |= set(tokenize(exp["problem"]))
+            matched = error_terms & entry_terms
+            if matched:
+                total_w = sum(idf.get(t, 1.0) for t in error_terms) or 1.0
+                matched_w = sum(idf.get(t, 1.0) for t in matched)
+                score += 0.6 * (matched_w / total_w)
+
+        return min(1.0, score)
 
     def _find_by_id(self, memory_id: str) -> Optional[Memory]:
         for m in self._memories:
