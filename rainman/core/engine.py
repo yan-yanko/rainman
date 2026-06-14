@@ -34,8 +34,13 @@ from rainman.core.text import (
     tokenize_query,
     tokenize_refs,
 )
+from rainman.core.fusion import reciprocal_rank_fusion
+from rainman.semantic import load_provider, cosine
+from rainman.core.log import get_logger
 from rainman.core.store import GLOBAL_DIR
 from rainman.core.storage import make_store
+
+log = get_logger(__name__)
 
 
 # ── Input limits ──────────────────────────────────────────────
@@ -55,6 +60,12 @@ PROJECT_BOOST = 1.2
 # 1.0 — surfaces the experience card for *this* file/error even when the
 # free-text query doesn't lexically match it.
 TASK_AFFINITY_BOOST = 0.8
+
+# Optional semantic lane (M7): a candidate whose dense (embedding) similarity to
+# the query clears this cosine clears the relevance floor even with zero lexical
+# overlap — this is what closes the synonym/abbreviation gap. Only active when a
+# local embedding provider is installed (rainman[semantic]); off by default.
+SEMANTIC_SIM_FLOOR = 0.6
 
 # Auto-linking threshold (keyword overlap)
 LINK_THRESHOLD = 0.25
@@ -104,6 +115,7 @@ class RainmanEngine:
         self._loaded = False
         audit_on = bool(self.policy.get("audit")) or audit_enabled()
         self.audit = AuditLogger(self.store.audit_path(), enabled=audit_on)
+        self._semantic_provider = _UNSET  # lazily resolved on first recall
 
     def _ensure_loaded(self) -> None:
         if not self._loaded:
@@ -403,6 +415,7 @@ class RainmanEngine:
         require_relevance: bool = True,
         context_files: Optional[List[str]] = None,
         error_signature: Optional[str] = None,
+        semantic_provider=None,
     ) -> List[RecallResult]:
         """
         Context-aware retrieval. Two-phase scoring with associative boost.
@@ -471,6 +484,13 @@ class RainmanEngine:
         }
         error_terms = set(tokenize(error_signature)) if error_signature else set()
 
+        # Optional semantic lane (M7): dense similarity of the query to each
+        # candidate, if a local embedding provider is available. Empty dict when
+        # absent -> recall stays pure-lexical and identical to before.
+        provider = semantic_provider if semantic_provider is not None \
+            else self._get_semantic_provider()
+        sem_sims = self._semantic_sims(provider, query, entries)
+
         # Phase 1: Score without associative boost
         initial = []
         for entry in entries:
@@ -534,9 +554,28 @@ class RainmanEngine:
                 if r.keyword_score > 0.0
                 or r.associative_score > 0.0
                 or r.task_affinity > 0.0
+                or sem_sims.get(r.memory.id, 0.0) >= SEMANTIC_SIM_FLOOR
             ]
 
-        results.sort(key=lambda r: r.total_score, reverse=True)
+        # Order: when a semantic lane is active, fuse the lexical ranking with
+        # the dense ranking via Reciprocal Rank Fusion (rank-based, no score
+        # calibration needed). With no provider this is a no-op and we sort by
+        # the lexical total — identical to pure-lexical recall.
+        if sem_sims:
+            survivors = {r.memory.id for r in results}
+            lexical_ranking = [
+                r.memory.id for r in sorted(
+                    results, key=lambda r: r.total_score, reverse=True)
+            ]
+            dense_ranking = [
+                mid for mid, _ in sorted(
+                    sem_sims.items(), key=lambda kv: kv[1], reverse=True)
+                if mid in survivors
+            ]
+            fused = reciprocal_rank_fusion([lexical_ranking, dense_ranking])
+            results.sort(key=lambda r: fused.get(r.memory.id, 0.0), reverse=True)
+        else:
+            results.sort(key=lambda r: r.total_score, reverse=True)
 
         # Update access stats on returned entries
         top_results = results[:limit]
@@ -855,6 +894,39 @@ class RainmanEngine:
             if overlap >= SUPERSEDE_OVERLAP:
                 out.append(m)
         return out
+
+    def _get_semantic_provider(self):
+        """Lazily resolve the optional local embedding provider (M7).
+
+        Only attempts to load one when org/user policy opts in via
+        ``semantic_search``; otherwise stays None so recall is pure-lexical with
+        zero overhead. Cached for the life of the engine.
+        """
+        if self._semantic_provider is _UNSET:
+            self._semantic_provider = (
+                load_provider() if self.policy.get("semantic_search") else None
+            )
+        return self._semantic_provider
+
+    def _semantic_sims(self, provider, query: str, entries: List[Memory]) -> Dict[str, float]:
+        """Cosine similarity of the query to each candidate via the provider.
+
+        Returns {} when there's no provider or empty query, or if the provider
+        errors — the semantic lane degrades gracefully to pure-lexical rather
+        than ever breaking recall.
+        """
+        if provider is None or not query.strip() or not entries:
+            return {}
+        try:
+            vectors = provider.embed([query] + [m.content for m in entries])
+            query_vec = vectors[0]
+            return {
+                m.id: cosine(query_vec, vectors[i + 1])
+                for i, m in enumerate(entries)
+            }
+        except Exception:
+            log.warning("semantic provider failed; falling back to lexical recall")
+            return {}
 
     def _find_by_id(self, memory_id: str) -> Optional[Memory]:
         for m in self._memories:

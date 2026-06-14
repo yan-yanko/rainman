@@ -19,6 +19,13 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 
+[project.optional-dependencies]
+# Optional local semantic-retrieval lane (M7). The CORE has ZERO runtime
+# dependencies; this extra adds a small, CPU-only, fully-local static embedding
+# model (model2vec / potion-base-8M, ~8MB, numpy-only — no torch, no network).
+# Installing it activates the dense lane when policy `semantic_search` is on.
+semantic = ["model2vec>=0.3.0"]
+
 [project.scripts]
 rainman = "rainman.__main__:main"
 
