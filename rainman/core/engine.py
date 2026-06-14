@@ -62,6 +62,18 @@ LINK_THRESHOLD = 0.25
 # Max memories before oldest low-value entries are pruned
 MAX_MEMORIES = 2000
 
+# Consolidation (M5). A new note this similar to an existing one is treated as a
+# re-observation and MERGED (reinforced) rather than stored as a duplicate.
+DEDUP_THRESHOLD = 0.85
+# A new memory carrying a supersession marker retires older memories it overlaps
+# at least this much — the old knowledge is kept for the record but hidden.
+SUPERSEDE_OVERLAP = 0.4
+SUPERSESSION_MARKERS = (
+    "no longer", "deprecated", "instead of", "migrated from", "migrated to",
+    "replaced by", "replaced with", "superseded", "we now use", "switched from",
+    "switched to", "moved away from", "rather than",
+)
+
 # Sentinel: caller didn't pass min_trust, so fall back to org policy.
 _UNSET = object()
 
@@ -109,7 +121,11 @@ class RainmanEngine:
         mems = self._memories
         if self.policy.get("disable_global_layer"):
             mems = [m for m in mems if m.layer != "global"]
-        return [m for m in mems if not m.metadata.get("quarantined")]
+        return [
+            m for m in mems
+            if not m.metadata.get("quarantined")
+            and not m.metadata.get("superseded_by")
+        ]
 
     def _apply_retention(self) -> None:
         """Delete memories older than the org retention TTL (compliance).
@@ -200,6 +216,27 @@ class RainmanEngine:
         if self.policy.get("quarantine_ingest") and trust.trust_level(source) == trust.INGEST:
             metadata = {**metadata, "quarantined": True}
 
+        # M5: near-duplicate consolidation. A note this similar to an existing
+        # one is a re-observation, not new knowledge — reinforce + merge metadata
+        # instead of storing a duplicate. Experience cards (failure/solution with
+        # a problem/fix payload) are intentional and never auto-merged.
+        if category == "note" and "experience" not in metadata:
+            dup = self._find_duplicate(content, layer)
+            if dup is not None:
+                dup.recall_count += 1
+                dup.last_recalled = ts
+                dup.timestamp = ts  # re-observed -> refresh recency
+                if tags:
+                    dup.tags = list(dict.fromkeys([*dup.tags, *tags]))[:MAX_TAGS]
+                if file_refs:
+                    dup.file_refs = list(dict.fromkeys([*dup.file_refs, *file_refs]))[:MAX_FILE_REFS]
+                self.store.save_one(dup)
+                self.audit.record(
+                    "consolidate_merge", actor=author,
+                    memory_ids=[dup.id], source=source,
+                )
+                return dup
+
         memory = Memory(
             id=f"rm_{int(ts * 1000)}_{uuid.uuid4().hex[:6]}",
             content=content,
@@ -237,6 +274,20 @@ class RainmanEngine:
             "store", actor=author, memory_ids=[memory.id],
             source=source, layer=layer, category=category,
         )
+
+        # M5: supersession. New knowledge that explicitly contradicts/replaces
+        # older knowledge ("we no longer use X", "migrated to Y") retires the
+        # overlapping older memories — kept for the record (audit/history) but
+        # hidden from recall via metadata.superseded_by.
+        if any(mark in content.lower() for mark in SUPERSESSION_MARKERS):
+            for old in self._find_superseded(content, layer, exclude_id=memory.id):
+                old.metadata = {**old.metadata, "superseded_by": memory.id}
+                self.store.save_one(old)
+                self.audit.record(
+                    "supersede", actor=author,
+                    memory_ids=[old.id], superseded_by=memory.id,
+                )
+
         return memory
 
     # ── Typed-causal experience cards (problem -> attempt -> outcome -> fix) ──
@@ -727,6 +778,48 @@ class RainmanEngine:
                 score += 0.6 * (matched_w / total_w)
 
         return min(1.0, score)
+
+    def _find_duplicate(self, content: str, layer: str) -> Optional[Memory]:
+        """Find an existing note that is a near-duplicate of ``content`` (same
+        layer), by stemmed-token Jaccard >= DEDUP_THRESHOLD. Experience cards and
+        superseded/quarantined memories are never merge targets."""
+        new_tokens = set(tokenize(content))
+        if len(new_tokens) < 3:
+            return None  # too short to judge similarity reliably
+        for m in self._memories:
+            if m.layer != layer or m.category != "note":
+                continue
+            if m.metadata.get("experience") or m.metadata.get("superseded_by") \
+                    or m.metadata.get("quarantined"):
+                continue
+            m_tokens = set(tokenize(m.content))
+            if not m_tokens:
+                continue
+            jaccard = len(new_tokens & m_tokens) / len(new_tokens | m_tokens)
+            if jaccard >= DEDUP_THRESHOLD:
+                return m
+        return None
+
+    def _find_superseded(self, content: str, layer: str,
+                         exclude_id: str) -> List[Memory]:
+        """Older memories (same layer) that the new content retires: token
+        overlap >= SUPERSEDE_OVERLAP, not already superseded, not the new one."""
+        new_tokens = set(tokenize(content))
+        if len(new_tokens) < 3:
+            return []
+        out = []
+        for m in self._memories:
+            if m.id == exclude_id or m.layer != layer:
+                continue
+            if m.metadata.get("superseded_by") or m.metadata.get("experience"):
+                continue
+            m_tokens = set(tokenize(m.content))
+            if not m_tokens:
+                continue
+            overlap = len(new_tokens & m_tokens) / len(m_tokens)
+            if overlap >= SUPERSEDE_OVERLAP:
+                out.append(m)
+        return out
 
     def _find_by_id(self, memory_id: str) -> Optional[Memory]:
         for m in self._memories:

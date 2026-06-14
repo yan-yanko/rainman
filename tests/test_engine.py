@@ -116,10 +116,10 @@ class TestTaskConditionedRecall:
     """M2: recall steered by current task state (open file + error signature)."""
 
     def test_file_affinity_boosts_matching_memory(self, engine):
-        engine.add("connection handling logic lives here", file_refs=["src/net/client.py"])
-        engine.add("connection handling logic lives here too", file_refs=["src/other.py"])
-        # Same query; the memory tied to the current file should win.
-        results = engine.recall("connection handling", context_files=["src/net/client.py"])
+        engine.add("connection pool tuning notes for the client", file_refs=["src/net/client.py"])
+        engine.add("connection pool tuning notes for the server", file_refs=["src/other.py"])
+        # Same query relevance; the memory tied to the current file should win.
+        results = engine.recall("connection pool tuning", context_files=["src/net/client.py"])
         assert results[0].memory.file_refs == ["src/net/client.py"]
         assert results[0].task_affinity > 0.0
 

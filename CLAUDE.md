@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 235 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 243 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -26,7 +26,7 @@ rainman/
     sentiment.py    Keyword-based sentiment classifier (zero LLM)
     trust.py        Trust levels (user>hook>ingest) derived from source; quality prior
     identity.py     current_actor() — local OS user / RAINMAN_AUTHOR
-    engine.py       Core: add, recall, context, links, forget, persist, retention, _visible()
+    engine.py       Core: add (w/ dedup+supersession), recall (task-conditioned), context, links, forget, persist, retention, _visible()
     store.py        JSON backend (default): layered persistence, file locking, fsync, schema_version
     sqlite_store.py SQLite backend (opt-in): WAL, per-layer DB, no 2000-cap, indexed
     storage.py      StorageBackend Protocol + make_store() backend factory
@@ -57,7 +57,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (235 tests total, all marked `unit`)
+tests/                  (243 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -74,6 +74,7 @@ tests/                  (235 tests total, all marked `unit`)
   test_review.py      quarantine review queue: approve/reject (Ph2c)
   test_salience.py    write-side salience scoring + threshold (M6)
   test_experience.py  typed-causal cards: record/find/resolve failure->fix pairing (M1)
+  test_consolidation.py  dedup/merge near-duplicates + supersession (M5)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync_client.py client-side sync: config/token-safety, push/pull apply (mocked HTTP)
   test_retrieval_quality.py  IR gate: recall@5/MRR on paraphrased queries + relevance floor
@@ -208,7 +209,7 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (235 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (243 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
