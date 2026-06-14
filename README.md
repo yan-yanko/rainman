@@ -299,9 +299,22 @@ is trust-tagged and held out of unsolicited context injection by default.
 
 Memory-poisoning defense is **gating, not ranking**. For the full model see
 [`THREAT_MODEL.md`](THREAT_MODEL.md); for reporting and release verification see
-[`SECURITY.md`](SECURITY.md). Teams can distribute non-overridable policy
-(mandatory redaction, recall trust floors, audit logging, retention) via the
-org policy control plane.
+[`SECURITY.md`](SECURITY.md).
+
+## Teams (optional)
+
+Rainman is built for the solo developer first. If you want a team to **share a
+repo's memory** — one dev's AI learns, everyone's AI knows — there's a separate,
+self-hostable sync server:
+
+```
+rainman remote add <server-url> <workspace> --token <token>
+rainman sync
+```
+
+The server (RBAC, OIDC SSO, audit, encryption at rest, org policy) lives in its
+own repo: **[rainman-server](https://github.com/yan-yanko/rainman-server)**
+(source-available, BSL 1.1). The client here stays MIT and stdlib-only.
 
 ## Requirements
 

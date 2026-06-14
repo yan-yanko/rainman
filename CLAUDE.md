@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pip install ./server && pytest tests/ -m unit` — 246 tests across 20 files. (`./server` brings PyJWT[crypto]/cryptography for the sync/SSO/encryption tests; without it those import-skip/fail.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 204 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -47,18 +47,14 @@ rainman/
     git.py          Parse git log into memories
     files.py        Scan project file tree into memories
   __main__.py       CLI entry point (argparse)
-server/             SEPARATE package (rainman-server) — self-hosted sync server, stdlib-only
-  rainman_server/
-    db.py           SQLite: seq cursor, tokens (RBAC role), items + tombstones, audit trail
-    app.py          ThreadingHTTPServer: sync (pull/push) + admin API, RBAC-enforced, audited
-    console.py      Minimal admin web console (HTML+vanilla JS) served at /admin
-    oidc.py         OIDC SSO: RS256 JWT validation (PyJWT) + claim->RBAC mapping
-    crypto.py       AES-256-GCM encryption-at-rest for memory content (RAINMAN_DB_KEY)
-    __main__.py     `rainman_server serve` + `token add --role` + `genkey`
-  Dockerfile        Container image (stdlib, no pip step)
-  DEPLOY.md         Production + air-gapped deploy runbook
-SOC2_READINESS.md   Control mapping to SOC 2 Trust Services Criteria + gap list
-tests/                  (181 tests total, all marked `unit`)
+
+The self-hosted TEAM SYNC SERVER now lives in a SEPARATE REPO:
+  https://github.com/yan-yanko/rainman-server  (BSL 1.1, source-available)
+It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
+plus its SOC2-readiness doc and the client<->server integration tests. This
+repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
+client half that talks to it via `rainman remote` / `rainman sync`.
+tests/                  (204 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -74,13 +70,9 @@ tests/                  (181 tests total, all marked `unit`)
   test_retention.py   TTL prune + global-layer save safety (Ph1d)
   test_review.py      quarantine review queue: approve/reject (Ph2c)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
-  test_sync.py        end-to-end sync over HTTP: push/pull/tombstone/auth (Ph2b)
-  test_rbac.py        role enforcement, admin API, audit, token migration (Ph3)
-  test_hardening.py   token hashing at rest + audit hash-chain tamper-evidence
-  test_oidc.py        OIDC SSO: claim->role mapping, rejection cases, static coexistence
-  test_encryption.py  AES-GCM content-at-rest: sealed on disk, round-trip, fail-closed
-  conftest.py         adds server/ to sys.path for sync tests
+  test_sync_client.py client-side sync: config/token-safety, push/pull apply (mocked HTTP)
 ```
+(Server-side + client<->server integration tests live in the rainman-server repo.)
 
 ## Data Model
 
@@ -151,44 +143,20 @@ rainman remote add <url> <ws> --token # Configure sync remote (Ph2b)
 rainman sync                          # Push + pull project memories (Ph2b)
 ```
 
-## Sync server (Phase 2b — separate `server/` package, stdlib-only)
+## Team sync (client side)
 
-```bash
-python -m rainman_server serve --host 0.0.0.0 --port 8787 --db ./sync.db
-python -m rainman_server token add --user alice --workspace acme-api --role contributor
-```
+The server lives in the separate **rainman-server** repo (RBAC, OIDC SSO,
+audit, encryption-at-rest, admin console, deploy/SOC2 docs). Here we only have
+the client half (`rainman/sync/client.py`, `rainman remote` / `rainman sync`).
 
-RBAC (Phase 3): roles `reader` (pull) < `contributor` (pull+push) < `admin`
-(manage tokens + audit). Admin console at `/admin`. Centralized audit trail
-(push/pull/token/revoke) in the server DB. Deploy: `server/DEPLOY.md` (Docker +
-air-gapped); compliance: `SOC2_READINESS.md`. SSO/SAML/SCIM deferred pending a
-target IdP; server stays stdlib-only until then.
-
-SSO (OIDC): the server accepts OIDC bearer JWTs from any RS256 IdP alongside
-static tokens (`oidc.py`) — JWT-shaped credential → OIDC path, else static
-token; both feed the same RBAC model. RS256-pinned (no alg confusion),
-`iss`/`aud`/`exp` verified, JWKS or pinned-key. MFA delegated to the IdP. Config
-via `RAINMAN_OIDC_*` env. SCIM provisioning not yet built (claims mapped at
-login). Server deps now: `cryptography`, `PyJWT[crypto]`.
-
-Server hardening: bearer tokens are stored/looked up as SHA-256 digests only
-(`token_digest`) — never cleartext at rest; raw tokens migrate in place. The
-audit log is hash-chained (`row_hash = sha256(prev | fields)`); `verify_audit`
-/ `GET /v1/admin/audit/verify` detects any altered or deleted row.
-
-Encryption at rest: memory content (`items.data`) is AES-256-GCM encrypted when
-`RAINMAN_DB_KEY` is set (`crypto.py`; `genkey` to mint); off = plaintext, mixed
-rows supported, reads fail closed without the key. Metadata + audit stay
-plaintext (host FDE). The server closes connections per response (no keep-alive)
-so ThreadingHTTPServer behaves deterministically under concurrent test load.
-
-Syncs the **project layer only** (global is personal). Monotonic-cursor delta
-protocol with tombstones; last-write-to-server-wins by `seq`. Bearer token per
-seat — stored in `~/.rainman/sync_credentials.json` or `RAINMAN_SYNC_TOKEN`,
-**never** the git-committable `.rainman/sync_state.json`. `sync` is push-then-pull
-(emit local tombstones before re-pulling). Client `pushed` map is the synced
-baseline, updated by both push AND pull (so pulled memories aren't re-uploaded
-and resurrected after another client deletes them). SessionStart auto-pulls.
+Client sync contract worth knowing:
+- Syncs the **project layer only** (global is personal/never leaves).
+- Bearer token (or OIDC JWT) lives in `~/.rainman/sync_credentials.json` or
+  `RAINMAN_SYNC_TOKEN` — **never** the git-committable `.rainman/sync_state.json`.
+- `sync` is **push-then-pull** (emit local tombstones before re-pulling, so a
+  local delete isn't resurrected). The `pushed` map is the synced baseline,
+  updated by both push AND pull (so pulled memories aren't re-uploaded and
+  resurrected after another client deletes them). SessionStart auto-pulls.
 
 ## MCP Server — 5 Tools
 
@@ -228,8 +196,8 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (205 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/ server/`.
-- **Client stays stdlib-only forever; the `server/` package MAY take deps** (decision 2026-06-13). The server is separate, so dependencies there don't touch the client's zero-dep claim. Server deps so far: `cryptography`, `PyJWT[crypto]` (for SSO/OIDC + encryption-at-rest). Never add a dep to `rainman/`.
+- **Never break the existing tests (204 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
 - **Auto-link threshold: 0.25.** New memories auto-link to existing ones if keyword overlap >= 25%.
