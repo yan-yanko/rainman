@@ -25,6 +25,7 @@ Register in .claude/settings.json:
 
 import json
 import os
+import re
 import sys
 
 
@@ -33,6 +34,9 @@ WATCHED_TOOLS = {"Read", "Edit", "Write", "Bash"}
 
 # Minimum content length to bother recording
 MIN_CONTENT_LENGTH = 50
+
+# Bash commands whose pass/fail outcome is worth capturing as experience.
+BASH_OUTCOME_KEYWORDS = ("pytest", "test", "build", "deploy", "migrate")
 
 
 def _coerce_output(resp) -> str:
@@ -79,6 +83,8 @@ def main():
     tool_output = _coerce_output(raw_output)
 
     from rainman.core.engine import RainmanEngine
+    from rainman.core.redact import safe_content
+    from rainman.core.salience import is_salient, salience_score
 
     engine = RainmanEngine(project_dir=cwd)
 
@@ -86,7 +92,14 @@ def main():
     if engine.policy.get("disable_auto_learn"):
         sys.exit(0)
 
-    # Extract learning based on tool type
+    # Bash gets dedicated experience-card handling: a failure becomes an OPEN
+    # card, and a later success on the same files RESOLVES it into a paired
+    # problem/fix card. This is the typed-causal write path, not a flat note.
+    if tool_name == "Bash":
+        _handle_bash(engine, tool_input.get("command", ""), tool_output)
+        sys.exit(0)
+
+    # Read/Edit -> note captures.
     learning = _extract_learning(tool_name, tool_input, tool_output)
     if not learning:
         sys.exit(0)
@@ -96,9 +109,13 @@ def main():
     if len(content) < MIN_CONTENT_LENGTH:
         sys.exit(0)
 
-    # Redact secrets before storing (built-in rules + org-policy additions).
-    from rainman.core.redact import safe_content
+    # Salience gate (M6): don't store low-signal "read file X" noise. A note must
+    # carry an error / security / config / intent signal to earn a slot.
+    score = salience_score(category, content, file_refs)
+    if not is_salient(category, content, file_refs):
+        sys.exit(0)
 
+    # Redact secrets before storing (built-in rules + org-policy additions).
     safe = safe_content(
         content,
         file_path=file_refs[0] if file_refs else None,
@@ -123,10 +140,77 @@ def main():
         file_refs=file_refs,
         source=f"hook:post_tool_use:{tool_name}",
         layer="project",
+        metadata={"salience": round(score, 2)},
     )
 
     # Silent — no stdout output (don't clutter Claude's context)
     sys.exit(0)
+
+
+def _paths_in_command(command: str) -> list:
+    """Extract file/path-ish tokens from a shell command (for failure->fix
+    pairing on overlapping files). Skips flags; keeps tokens with a path
+    separator or a file extension."""
+    out, seen = [], set()
+    for tok in command.split():
+        if tok.startswith("-"):
+            continue
+        if "/" in tok or re.search(r"\.\w{1,5}$", tok):
+            if tok not in seen:
+                seen.add(tok)
+                out.append(tok)
+    return out[:20]
+
+
+def _handle_bash(engine, command: str, tool_output) -> None:
+    """Capture Bash test/build outcomes as typed-causal experience cards."""
+    if not command:
+        return
+    if not any(kw in command.lower() for kw in BASH_OUTCOME_KEYWORDS):
+        return
+
+    from rainman.core.redact import safe_content
+    from rainman.core.salience import is_salient, salience_score
+
+    output_str = _coerce_output(tool_output)[:1000]
+    lowered = output_str.lower()
+    failed = "failed" in lowered or "error" in lowered
+    passed = "passed" in lowered or "success" in lowered
+    file_refs = _paths_in_command(command)
+
+    if failed:
+        problem = f"{command[:120]} — {output_str[:300]}"
+        safe = safe_content(
+            problem,
+            extra_patterns=engine.policy.get("extra_redaction_patterns"),
+        )
+        if safe is None:
+            return
+        engine.record_failure(
+            problem=safe, command=command, file_refs=file_refs,
+            source="hook:post_tool_use:Bash",
+        )
+        return
+
+    if passed:
+        # Did this success resolve an open failure on the same files? If so,
+        # pair them into a problem/fix card instead of a standalone note.
+        open_failure = engine.find_open_failure(file_refs)
+        if open_failure is not None:
+            engine.resolve_failure(
+                open_failure,
+                fix=f"{command[:120]} now passes",
+                source="hook:post_tool_use:Bash",
+            )
+            return
+        content = f"Command succeeded: {command[:120]}"
+        if is_salient("note", content, file_refs, command):
+            engine.add(
+                content=content, category="note", file_refs=file_refs,
+                source="hook:post_tool_use:Bash", layer="project",
+                metadata={"salience": round(
+                    salience_score("note", content, file_refs, command), 2)},
+            )
 
 
 def _extract_learning(tool_name, tool_input, tool_output):
@@ -162,20 +246,7 @@ def _extract_learning(tool_name, tool_input, tool_output):
             [file_path],
         )
 
-    elif tool_name == "Bash":
-        command = tool_input.get("command", "")
-        output_str = str(tool_output)[:300] if tool_output else ""
-
-        # Only record test runs, builds, and significant commands
-        if any(kw in command for kw in ["pytest", "test", "build", "deploy", "migrate"]):
-            failed = "failed" in output_str.lower() or "error" in output_str.lower()
-            passed = "passed" in output_str.lower() or "success" in output_str.lower()
-            # Check failure first — "30 failed, 100 passed" contains both words
-            if failed:
-                return (f"Command failed: {command[:100]} — {output_str[:150]}", "failure", [])
-            elif passed:
-                return (f"Command succeeded: {command[:100]}", "note", [])
-
+    # Bash is handled separately by _handle_bash (typed-causal experience cards).
     return None
 
 

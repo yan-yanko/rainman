@@ -233,6 +233,110 @@ class RainmanEngine:
         )
         return memory
 
+    # ── Typed-causal experience cards (problem -> attempt -> outcome -> fix) ──
+    #
+    # The defensible signal for a coding agent isn't "file X was read"; it's
+    # "this failed, then this fixed it." We capture failures as OPEN experience
+    # cards and, when a later success touches the same files, pair them into a
+    # resolved problem/fix card (ExpeL arXiv:2308.10144; Agent KB
+    # arXiv:2507.06229). The typed payload lives in metadata["experience"] so no
+    # schema/dataclass change is needed and old stores load unchanged.
+
+    def record_failure(
+        self,
+        problem: str,
+        command: Optional[str] = None,
+        file_refs: Optional[List[str]] = None,
+        source: str = "hook:post_tool_use",
+        layer: str = "project",
+    ) -> Optional[Memory]:
+        """Store an OPEN failure experience card."""
+        problem = (problem or "").strip()
+        if not problem:
+            return None
+        experience = {
+            "problem": problem[:MAX_CONTENT_LENGTH],
+            "command": (command or "")[:500],
+            "outcome": "open",
+            "fix": None,
+        }
+        return self.add(
+            content=f"Failure: {problem[:200]}",
+            category="failure",
+            file_refs=file_refs,
+            source=source,
+            layer=layer,
+            metadata={"experience": experience},
+        )
+
+    def find_open_failure(
+        self,
+        file_refs: Optional[List[str]],
+        within_seconds: float = 86400,
+    ) -> Optional[Memory]:
+        """Most-recent unresolved failure card whose files overlap ``file_refs``.
+
+        Used to pair a passing run with the failure it resolved. Returns None if
+        there's no open, file-overlapping failure inside the time window.
+        """
+        self._ensure_loaded()
+        if not file_refs:
+            return None
+        ref_set = set(file_refs)
+        now = time.time()
+        candidates = [
+            m for m in self._memories
+            if m.category == "failure"
+            and isinstance(m.metadata.get("experience"), dict)
+            and m.metadata["experience"].get("outcome") == "open"
+            and now - m.timestamp <= within_seconds
+            and ref_set & set(m.file_refs)
+        ]
+        candidates.sort(key=lambda m: m.timestamp, reverse=True)
+        return candidates[0] if candidates else None
+
+    def resolve_failure(
+        self,
+        failure: Memory,
+        fix: str,
+        source: str = "hook:post_tool_use",
+    ) -> Optional[Memory]:
+        """Mark a failure card resolved and create a linked solution card.
+
+        Returns the new solution Memory (the failure is updated in place and
+        both directions of the link are persisted).
+        """
+        fix = (fix or "").strip()
+        prior = failure.metadata.get("experience", {}) if failure.metadata else {}
+        solution = self.add(
+            content=f"Fix: {fix[:200]}",
+            category="solution",
+            file_refs=list(failure.file_refs),
+            source=source,
+            layer=failure.layer,
+            metadata={"experience": {
+                "problem": prior.get("problem"),
+                "command": prior.get("command"),
+                "outcome": "resolved",
+                "fix": fix[:MAX_CONTENT_LENGTH],
+                "resolved_failure": failure.id,
+            }},
+        )
+
+        # Flip the failure card to resolved and cross-link the two.
+        experience = {**prior, "outcome": "resolved",
+                      "resolved_by": solution.id if solution else None,
+                      "fix": fix[:MAX_CONTENT_LENGTH]}
+        failure.metadata = {**failure.metadata, "experience": experience}
+        if solution:
+            if solution.id not in failure.linked_ids:
+                failure.linked_ids.append(solution.id)
+            if failure.id not in solution.linked_ids:
+                solution.linked_ids.append(failure.id)
+            self.store.save_one(solution)
+        self.store.save_one(failure)
+        return solution
+
     def recall(
         self,
         query: str,

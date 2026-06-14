@@ -176,6 +176,53 @@ class TestPostToolUse:
         memories = _load_memories(project)
         assert len(memories) == 1  # Dedup should prevent second entry
 
+    def test_boring_read_is_not_stored(self, project_dir):
+        """M6: a substantial-but-low-signal file read is dropped, not stored."""
+        project, global_dir = project_dir
+        hook_input = {
+            "tool_name": "Read",
+            "cwd": project,
+            "tool_input": {"file_path": "utils/formatting.py"},
+            "tool_response": "def to_title_case(text):\n    return text.title()\n\ndef pad(text, n):\n    return text.ljust(n)\n" * 4,
+        }
+        result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
+        assert result.returncode == 0
+        assert _load_memories(project) == []
+
+    def test_bash_failure_then_pass_pairs_into_fix(self, project_dir):
+        """M1: a failing test run, then a passing run on the same file, get
+        paired into a resolved problem/fix experience card."""
+        project, global_dir = project_dir
+        fail = {
+            "tool_name": "Bash",
+            "cwd": project,
+            "tool_input": {"command": "pytest tests/test_auth.py -x"},
+            "tool_response": "FAILED tests/test_auth.py::test_login - AssertionError: expected 200 got 401\n1 failed in 1.2s",
+        }
+        _run_hook("rainman.hooks.post_tool_use", fail, project)
+        after_fail = _load_memories(project)
+        assert len(after_fail) == 1
+        assert after_fail[0]["category"] == "failure"
+        assert after_fail[0]["metadata"]["experience"]["outcome"] == "open"
+
+        passing = {
+            "tool_name": "Bash",
+            "cwd": project,
+            "tool_input": {"command": "pytest tests/test_auth.py -x"},
+            "tool_response": "1 passed in 1.1s",
+        }
+        _run_hook("rainman.hooks.post_tool_use", passing, project)
+        after_pass = _load_memories(project)
+
+        # The failure was resolved + a linked solution card was created.
+        by_cat = {m["category"]: m for m in after_pass}
+        assert "failure" in by_cat and "solution" in by_cat
+        failure = by_cat["failure"]
+        solution = by_cat["solution"]
+        assert failure["metadata"]["experience"]["outcome"] == "resolved"
+        assert solution["metadata"]["experience"]["resolved_failure"] == failure["id"]
+        assert solution["id"] in failure["linked_ids"]
+
     def test_legacy_tool_output_fallback(self, project_dir):
         """Older payloads used 'tool_output'; the hook must still read it."""
         project, global_dir = project_dir

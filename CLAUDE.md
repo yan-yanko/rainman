@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 211 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 229 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -31,6 +31,7 @@ rainman/
     sqlite_store.py SQLite backend (opt-in): WAL, per-layer DB, no 2000-cap, indexed
     storage.py      StorageBackend Protocol + make_store() backend factory
     redact.py       Secret redaction + path denylist (+ org-policy extras) for auto-learn safety
+    salience.py     Write-side curation: score how worth-remembering an auto-learned memory is (gate hook spam)
     audit.py        Append-only JSONL audit log (opt-in, batched) — store/recall/forget/retention
     config.py       Policy control plane (org.enforce > project > user > org.defaults > builtin)
     log.py          Structured stdlib logging (RAINMAN_LOG_LEVEL)
@@ -41,7 +42,7 @@ rainman/
   hooks/
     session_start.py   Load project context at session start (also handles post-compaction re-injection)
     post_compact.py    Legacy compaction hook (logging only; re-injection moved to session_start)
-    post_tool_use.py   Auto-learn from file reads, edits, test runs
+    post_tool_use.py   Auto-learn from file reads, edits, test runs (salience-gated; Bash outcomes -> typed-causal experience cards w/ failure->fix pairing)
     session_end.py     Capture key decisions from conversation transcripts
   sync/
     client.py       SyncClient — push/pull project memories to a sync server (stdlib urllib)
@@ -56,7 +57,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (211 tests total, all marked `unit`)
+tests/                  (229 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -71,6 +72,8 @@ tests/                  (211 tests total, all marked `unit`)
   test_config.py      policy precedence + wired knobs (Ph1c)
   test_retention.py   TTL prune + global-layer save safety (Ph1d)
   test_review.py      quarantine review queue: approve/reject (Ph2c)
+  test_salience.py    write-side salience scoring + threshold (M6)
+  test_experience.py  typed-causal cards: record/find/resolve failure->fix pairing (M1)
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync_client.py client-side sync: config/token-safety, push/pull apply (mocked HTTP)
   test_retrieval_quality.py  IR gate: recall@5/MRR on paraphrased queries + relevance floor
@@ -203,7 +206,7 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (211 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (229 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.
@@ -220,6 +223,7 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 - `store.load_all()` merges both layers; `store.save_one()` persists to the correct layer file
 - Hooks read JSON from stdin; only SessionStart outputs to stdout (context injection)
 - `RecallResult` uses `total_score` (not `score`) for the composite score
+- **Experience cards (typed-causal memory):** `engine.record_failure()` stores an OPEN failure card with `metadata["experience"] = {problem, command, outcome, fix}`; `engine.find_open_failure(file_refs)` locates an unresolved, file-overlapping failure; `engine.resolve_failure(failure, fix)` flips it to `resolved`, creates a linked `solution` card, and persists both. The Bash hook auto-pairs a failing run with a later passing run on the same files.
 
 ## Running Tests
 
