@@ -1,0 +1,27 @@
+{
+  "_note": "Verbatim answers from 12 fresh Claude subagents (6 tasks x off/on), captured 2026-06-14. 'off' = task prompt only; 'on' = prompt + the memory_context recall() surfaced. Re-grade with: python eval/local_demo/quillpay_demo.py --grade",
+  "t1": {
+    "off": "No such codebase is present here — this repo is \"Rainman,\" a local developer-memory/MCP tool, and contains no \"Quillpay\" payments service, charge handler, or charge-auth-validation function. Best engineering guess for a typical payments service: validate the incoming charge's auth in a middleware/guard function such as validate_charge_auth(request) (or verify_bearer_token / authenticate_charge_request) that pulls the Authorization: Bearer token header, verifies the JWT signature/expiry, and rejects with 401 before the charge handler runs.",
+    "on": "Call verify_quill_sig(req, scope='charge') — this codebase deliberately does not use standard JWT libraries for validating an incoming charge request's auth token."
+  },
+  "t2": {
+    "off": "Note: no \"Quillpay\"/payments code exists in this repo (this is the Rainman memory tool), so this is a best-practice engineering guess. The charge client should use 3 retry attempts (4 total tries) with exponential backoff and full jitter — base 200ms doubling (200ms, 400ms, 800ms) capped at ~2s, retrying only idempotent/safe failures (network errors, HTTP 429, 5xx) with a fixed idempotency key per charge so retries don't double-charge; never retry hard 4xx declines (402/400).",
+    "on": "Use exactly 5 retry attempts with a fixed 400ms backoff and NO jitter — exceeding 5 attempts trips the fraud lock."
+  },
+  "t3": {
+    "off": "No \"Quillpay\" payments codebase exists in this environment (this repo is \"Rainman,\" a stdlib-only developer memory tool with no payment code), so I cannot cite a real function. Best engineering guess for a Stripe-style payments codebase: new code should submit a charge via the modern PaymentIntents flow — e.g., a service method like PaymentService.createPaymentIntent(...) (wrapping stripe.PaymentIntents.create) rather than the deprecated legacy Charges.create/chargeCard API.",
+    "on": "New code must submit charges via quill.charge_v2.submit(idempotency_key=...); the legacy chargeV1 path is deprecated."
+  },
+  "t4": {
+    "off": "No Quillpay code exists in this repo (it's the Rainman memory tool), so this is a best-guess by convention: staging deploys to the staging Kubernetes cluster in AWS region us-east-1.",
+    "on": "Staging deploys go to cluster qp-stg-7 in the eu-central-1 region. (Do not deploy to us-east-1 — it silently drops settlement events.)"
+  },
+  "t5": {
+    "off": "No such codebase exists here — this repo is \"Rainman,\" a developer memory tool, with no Quillpay/settlement/cron code. Best engineering guess for a payment settlement cron: 00:00 UTC (midnight) daily, to batch-process the prior day's transactions just after the network settlement cutoff.",
+    "on": "03:17 UTC"
+  },
+  "t6": {
+    "off": "Note: there is no \"Quillpay\" codebase in this environment (the repo is Rainman), so this is a best-engineering-guess based on standard payment-webhook conventions. Inbound webhooks are most likely verified by reading a custom signature header such as X-Quillpay-Signature (often with a timestamp), recomputing HMAC-SHA256 over the raw request body using the endpoint's shared webhook secret, and comparing with a constant-time hmac.compare_digest.",
+    "on": "Inbound webhook signatures are verified from the X-Quill-Trace header using HMAC-SHA512 (not SHA-256), via the verify_quill_sig() helper."
+  }
+}
