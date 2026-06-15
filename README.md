@@ -8,6 +8,8 @@ Context-aware project memory for AI coding tools. Remembers what you've built, w
 
 No embeddings, no API calls — zero tokens to store and rank memory. Recalled memories are injected as ordinary context (the relevant slice, not your whole history), so they cost normal input tokens only when actually used — fewer than pasting your full CLAUDE.md into every prompt.
 
+> 📈 **New:** see [`docs/WHATS_NEW.md`](docs/WHATS_NEW.md) for what changed this cycle — typed experience cards, on-device curation, task-conditioned + optional-semantic recall, and reproducible evidence ([`eval/`](eval/)).
+
 ## Why This Exists
 
 We were debugging a systematic voting bias in an election predictor. The AI assistant (Claude Code) declared the problem "unfixable by prompt engineering" and spent hours exploring workarounds.
