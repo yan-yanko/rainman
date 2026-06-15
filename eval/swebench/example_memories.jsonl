@@ -1,0 +1,2 @@
+{"content": "authentication 401 after refresh: the middleware compared the token before refreshing it; fix is refresh-then-compare", "category": "solution", "file_refs": ["src/auth/middleware.py"]}
+{"content": "charge retry budget is exactly 5 attempts with fixed 400ms backoff and no jitter; more trips the fraud lock", "category": "convention", "file_refs": ["src/charge/client.py"]}

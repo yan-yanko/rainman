@@ -1,0 +1,2 @@
+{"id": "demo-1", "prompt": "authentication fails with 401 after the token refreshes", "files": ["src/auth/middleware.py"], "error": "HTTP 401 Unauthorized"}
+{"id": "demo-2", "prompt": "charge client retries forever and trips the fraud lock", "files": ["src/charge/client.py"]}

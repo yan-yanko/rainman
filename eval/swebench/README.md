@@ -39,18 +39,39 @@ experience reuse ≈ +8pp (SWE Context Bench); typed experience cards ≈ +12pp
 # Prove the plumbing with a mock agent (NOT a result):
 python eval/swebench/run_eval.py --dry-run
 
-# Real run (you provide the agent + dataset):
-#   1. implement AgentProtocol.solve() wrapping your coding agent
-#   2. load SWE-bench Verified instances into AgentTask records
-#   3. seed the engine with the project's memories
-#   4. wire them into run_eval.py and drop --dry-run
+# Smoke-test the turnkey wiring with the bundled example agent + files:
+python eval/swebench/run_eval.py \
+    --tasks eval/swebench/example_tasks.jsonl \
+    --memories eval/swebench/example_memories.jsonl \
+    --agent example_agent:EchoAgent
+
+# Real run — your agent, your tasks, your project's memories (no script editing):
+python eval/swebench/run_eval.py \
+    --tasks tasks.jsonl \
+    --memories project_memories.jsonl \
+    --agent my_pkg.my_agent:SweAgent \
+    --json
 ```
+
+### Turnkey: 3 things you provide
+
+1. **`--tasks tasks.jsonl`** — one JSON object per line:
+   `{"id": "...", "prompt": "...", "files": ["..."], "error": "..."}`
+   (`files`/`error` are optional and feed task-state-conditioned recall.)
+2. **`--memories project_memories.jsonl`** (optional) — the prior memories to
+   seed: `{"content": "...", "category": "solution", "file_refs": ["..."]}`.
+   In practice you'd point the engine at a team's real `.rainman/` store instead.
+3. **`--agent module:attr`** — any object/class with
+   `solve(task, memory_context: str) -> bool`. Copy `example_agent.py` and drop
+   in your coding agent. The harness runs it once per task per arm
+   (`memory_context` is `""` on the memory-off arm) and reports the lift.
 
 ## Requirements for a real run
 
 - SWE-bench Verified (500 tasks) or Lite (300) — https://www.swebench.com
 - A coding agent exposing `solve(task, memory_context) -> bool`
-- Compute to run the agent twice per task
+- Compute to run the agent twice per task (and, for SWE-bench, the per-repo test
+  environments to grade fail→pass)
 
-Until those are wired, this prints `[MOCK]` and refuses to emit a headline
-number.
+Without `--tasks`/`--agent` this prints `[MOCK]` (or exits) and refuses to emit a
+headline number. Nothing here fabricates a result.
