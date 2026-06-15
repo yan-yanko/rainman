@@ -68,9 +68,16 @@ class TestFusion:
 @pytest.mark.unit
 class TestProviderSeam:
 
-    def test_loader_returns_none_without_extra(self):
-        # Neither rainman_semantic nor model2vec is installed in the test env.
-        assert load_provider() is None
+    def test_loader_matches_extra_availability(self):
+        # Loader returns a provider iff a backend is importable; None otherwise.
+        import importlib.util
+        has_backend = importlib.util.find_spec("model2vec") is not None
+        provider = load_provider()
+        if has_backend:
+            assert provider is not None
+            assert isinstance(provider, SemanticProvider)
+        else:
+            assert provider is None
 
     def test_default_engine_has_no_provider(self, engine):
         assert engine._get_semantic_provider() is None

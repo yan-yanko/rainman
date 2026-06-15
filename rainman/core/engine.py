@@ -65,7 +65,13 @@ TASK_AFFINITY_BOOST = 0.8
 # the query clears this cosine clears the relevance floor even with zero lexical
 # overlap — this is what closes the synonym/abbreviation gap. Only active when a
 # local embedding provider is installed (rainman[semantic]); off by default.
-SEMANTIC_SIM_FLOOR = 0.6
+#
+# Calibrated for the default backend (model2vec / potion-base-8M, a compressed
+# static model whose cosines run low): measured dev-domain synonym pairs land
+# 0.20-0.43 and unrelated pairs <=0.024, so 0.15 cleanly separates them with
+# margin on both sides. Larger transformer backends produce higher cosines and
+# want a higher floor — override per call via recall(semantic_floor=...).
+SEMANTIC_SIM_FLOOR = 0.15
 
 # Auto-linking threshold (keyword overlap)
 LINK_THRESHOLD = 0.25
@@ -416,6 +422,7 @@ class RainmanEngine:
         context_files: Optional[List[str]] = None,
         error_signature: Optional[str] = None,
         semantic_provider=None,
+        semantic_floor: float = SEMANTIC_SIM_FLOOR,
     ) -> List[RecallResult]:
         """
         Context-aware retrieval. Two-phase scoring with associative boost.
@@ -554,7 +561,7 @@ class RainmanEngine:
                 if r.keyword_score > 0.0
                 or r.associative_score > 0.0
                 or r.task_affinity > 0.0
-                or sem_sims.get(r.memory.id, 0.0) >= SEMANTIC_SIM_FLOOR
+                or sem_sims.get(r.memory.id, 0.0) >= semantic_floor
             ]
 
         # Order: when a semantic lane is active, fuse the lexical ranking with

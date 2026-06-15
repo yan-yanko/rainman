@@ -66,6 +66,30 @@ and `--grade <your_run.json>`.
 `5xx`/`429`. (The first run used loose substring matching and produced one
 false positive on t2; this is the corrected grader.)
 
+## Companion: `semantic_lift.py` — what the optional semantic lane adds
+
+`quillpay_demo.py` shows *lexical* memory helps an agent. `semantic_lift.py`
+isolates the **optional semantic lane** (M7, `rainman[semantic]`/model2vec) and
+measures it **deterministically — no LLM, no agent, fully reproducible**: for
+synonym queries that share *no words* with their card, does the answer-bearing
+card still surface in the top-k? Measured with pure lexical recall vs
+lexical+semantic, over a store seeded with distractor cards.
+
+Result with `potion-base-8M` (`python eval/local_demo/semantic_lift.py`):
+
+```
+SYNONYM queries (no shared words with their card):
+  lexical recall 2/6  ->  +semantic recall 5/6   (recovered 3 of 4 lexical misses)
+CONTROL queries (answer is in NO card):
+  lexical 0/2  semantic 0/2   (the lane doesn't hallucinate a retrieval)
+Honest misses (semantic also failed to surface the card): ['s1']
+```
+
+Note the unhidden miss (`s1`): the webhook query embeds closer to the charge
+cards than the webhook card, so even semantic recall@3 misses it. Left in on
+purpose — semantic retrieval is a real improvement, not magic. Requires the
+extra (`pip install 'rainman[semantic]'`); without it the script says so.
+
 ## Honest caveats — what this does NOT show
 
 - **N = 6, synthetic.** The facts were *designed* to be unguessable, so the
