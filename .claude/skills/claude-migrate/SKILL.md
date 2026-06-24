@@ -1,17 +1,18 @@
 ---
 name: claude-migrate
 description: >-
-  Migrate an older repository to current Claude Code conventions — subtractively,
-  and safely. Use when a project predates today's CLAUDE.md / skills / hooks
-  conventions and feels "not built right for Claude": a bloated or missing
-  CLAUDE.md, always-on rules that eat the token budget, no runnable verify loop,
-  or months of lost context. This is NOT a checklist of files to add — it shrinks
-  always-on context, relocating rules/history/automation out of CLAUDE.md into
-  skills/hooks/memory. It runs a non-mutating diagnosis first, emits a full
-  migration plan for one approval, and only then rewrites a lean,
-  minimal-sufficient CLAUDE.md from the code — measuring the always-on token
-  budget before vs after. An optional rainman lane backfills lost context from
-  git history. Nothing mutates without approval.
+  Audit whether an older repository is "built right for today's Claude," and
+  migrate it — subtractively and safely. Use when a project predates today's
+  conventions (a lean CLAUDE.md, skills, hooks, a web SessionStart setup, MCP)
+  and you want to know what's ready, what's bloated, and what's missing. It first
+  produces a non-mutating READINESS REPORT across every pillar — rules
+  (CLAUDE.md), the verify loop (tests + lint), web/session setup, workflow
+  automation, and recallable history/memory — then a migration plan for one
+  approval. Diagnosis is comprehensive; prescription stays subtractive: it shrinks
+  always-on context (relocating rules/history/automation out of CLAUDE.md into
+  skills/hooks/memory) and recommends ADDING only what the project demonstrably
+  needs — never a bloat checklist. Nothing mutates without approval. Optional
+  rainman lane backfills lost context from git history.
 ---
 
 # claude-migrate
@@ -22,6 +23,13 @@ commands, more MCP, more hooks, and score a bloated repo as "ready." This tool
 is **subtractive**: a lean CLAUDE.md, fewer always-on rules, a low token budget.
 It scores *less* higher — with one floor: the lean file must still be
 **sufficient** (hard rules + how-to-verify survive).
+
+**Two questions, one tool.** *"Is my project ready for today's Claude?"* needs a
+**complete** answer — so the diagnosis reports on every readiness pillar,
+including what's *missing* (no verify loop, no web SessionStart hook, no
+commands). *"How do I fix it without making it worse?"* needs a **disciplined**
+answer — so the prescription stays subtractive: slim and relocate, and add only
+what's demonstrably needed. Comprehensive detection, restrained prescription.
 
 ## The one idea this tool is built on
 
@@ -75,7 +83,35 @@ an `--apply` argument that still re-confirms the plan).
 > The only write in this entire mode is creating one new file — the plan. Nothing
 > that already exists is edited, moved, or deleted.
 
-### D1. Measure the baseline (deterministic)
+### D0. Readiness scan (deterministic — answers "is it ready for today's Claude?")
+
+Before touching CLAUDE.md, inventory **every** readiness pillar so the report
+covers the whole question, not just the always-on file. Pure detection — the
+prescription discipline (below) decides what, if anything, to *add*.
+
+```bash
+# --- Claude-readiness pillars (deterministic inventory) ---
+root="${1:-.}"
+vloop_re='pytest|unittest|npm (run )?test|cargo test|go test|make test|tox|ruff|eslint|biome|lint'
+row(){ printf "  %-26s %s\n" "$1" "$2"; }
+
+echo "## Readiness pillars"
+row "rules (CLAUDE.md)"        "$( [ -f "$root/CLAUDE.md" ] && echo present || echo 'MISSING — /init first' )"
+row "verify loop (tests+lint)" "$( grep -aqiE "$vloop_re" "$root/CLAUDE.md" "$root/README"* 2>/dev/null && echo documented || echo 'NONE — must-have' )"
+row "web SessionStart hook"    "$( grep -aqi 'SessionStart' "$root/.claude/settings.json" 2>/dev/null && echo configured || echo none )"
+row "slash commands"           "count=$( ls "$root/.claude/commands" 2>/dev/null | grep -c . )"
+row "subagents"                "count=$( ls "$root/.claude/agents" 2>/dev/null | grep -c . )"
+row "MCP config"               "$( { [ -f "$root/.mcp.json" ] || grep -aqi 'mcpServers' "$root/.claude/settings.json" 2>/dev/null; } && echo present || echo none )"
+row "memory / history recall"  "$( { [ -d "$root/.rainman" ] || command -v rainman >/dev/null 2>&1; } && echo 'rainman available' || echo none )"
+row ".gitignore (artifacts)"   "$( [ -f "$root/.gitignore" ] && echo present || echo MISSING )"
+row "README"                   "$( ls "$root/README"* >/dev/null 2>&1 && echo present || echo MISSING )"
+```
+
+Render this as a **readiness table** in the plan: each pillar marked ✅ ready /
+⚠️ bloated / ❌ missing-needed / ➖ optional, each with a one-line recommendation
+that obeys the prescription discipline.
+
+### D1. Measure the CLAUDE.md baseline (deterministic)
 
 File-based and robust; slash-command output is an optional cross-check, never a
 dependency (it's the most format-fragile seam).
@@ -129,6 +165,10 @@ plan's bytes are the single source of truth.
 Emit the plan — present it inline **and** save it to `docs/claude-migrate-plan.md`
 (a new file; the only write this mode makes). The plan must contain:
 
+- **Readiness report** (from D0): every pillar — rules, verify loop, web/session
+  setup, workflow automation, memory — marked ✅ ready / ⚠️ bloated / ❌
+  missing-needed / ➖ optional, each with a one-line recommendation. This is the
+  part that answers *"is my project ready?"*; the rest is the CLAUDE.md fix.
 - **Before** numbers from D1.
 - **The verbatim proposed lean CLAUDE.md**, in full.
 - **The relocation table** (every block leaving CLAUDE.md → its destination; see
@@ -220,6 +260,21 @@ knowledge relocated        —   23 items → skills/hooks/memory
 Headline: always-on budget drops with **no knowledge lost** and **no test
 regressed** — cost moved from per-turn to per-recall.
 
+### A7. Additive must-haves (only the approved ones — see prescription discipline)
+
+The subtractive rewrite (A2–A6) is the core action. For *missing* pillars the
+readiness report flagged as must-haves, scaffold each as a **separate,
+individually-approved** step — leaning on built-ins, not hand-rolling:
+
+- missing/weak **verify loop** → add a documented, runnable test+lint command (it
+  gates the sufficiency floor and the "no worse" check).
+- no **web SessionStart hook** and the repo runs on Claude Code for web → use the
+  `session-start-hook` skill.
+- missing **CLAUDE.md** entirely → `/init` first, then migrate.
+
+Optional pillars (extra commands, subagents, MCP) are **named, not added** —
+recommend only with evidence of a repeated workflow that needs them.
+
 ---
 
 ## The subtractive rubric
@@ -254,6 +309,22 @@ push *close* to minimal precisely because the overflow has a home — memory.
 | **memory** | history, rationale, "we tried X and it broke", gotchas | rainman (lane on) / `docs/DECISIONS.md` (lane off) |
 
 Most prunable content is **memory** — it's not a rule, skill, or hook; it's recall.
+
+### Prescription discipline (the additive gaps)
+
+The readiness report surfaces *missing* pieces too — but resist turning that into
+a bloat checklist. Detection is comprehensive; prescription is restrained:
+
+- **Must-haves** (recommend + scaffold on approval, via A7): a runnable+documented
+  **verify loop**, and a **web SessionStart hook** if the repo runs on Claude Code
+  for web. These gate everything else.
+- **Lean on built-ins:** missing `CLAUDE.md` → `/init`; web setup → the
+  `session-start-hook` skill. Don't reimplement what a built-in already does.
+- **Optional** (name, don't add): extra slash commands, subagents, MCP — recommend
+  only with evidence of a repeated workflow that needs them. Default is "skip."
+
+The bias is unchanged: a thing earns its place only by being *needed* — whether
+it's staying in CLAUDE.md or being added to the repo.
 
 ## rainman lane (optional, gated)
 

@@ -1,10 +1,14 @@
 # claude-migrate
 
-A Claude Code **skill** that migrates an older repo to current conventions
-**subtractively** — it shrinks always-on context instead of adding more files.
-It rewrites a lean, minimal-sufficient `CLAUDE.md` from the code and relocates
-history / procedures / automation out of always-on context into
-memory / skills / hooks, measuring the always-on token budget before vs after.
+A Claude Code **skill** that answers *"is this repo built right for today's
+Claude?"* and then fixes it **subtractively**. It first produces a non-mutating
+**readiness report** across every pillar — rules (`CLAUDE.md`), the verify loop
+(tests+lint), web/session setup, workflow automation, and recallable history —
+flagging what's ready, what's bloated, and what's missing. Then it migrates: a
+lean, minimal-sufficient `CLAUDE.md` rewritten from the code, with
+history / procedures / automation relocated out of always-on context into
+memory / skills / hooks. Diagnosis is comprehensive; prescription stays
+subtractive — it adds only what the project demonstrably needs, never a checklist.
 
 > Design credit: this implements the subtractive-audit proposal — the
 > "reward *less*" bias, the deterministic-measurement vs Claude-judgment split,
@@ -61,9 +65,10 @@ Diagnose (non-mutating)  →  ⛔ one approval gate  →  Apply (after approval)
 1. **Bash-only** — Windows needs Git Bash/WSL (see prerequisites).
 2. **Coverage is Python + synthetic.** Validated on a `unittest` project; JS /
    monorepo / "no `CLAUDE.md` at all" are not yet exercised.
-3. **Two paths designed but not yet run end-to-end:** the `settings.json`
-   hook-**merge** (the test repo proposed no hooks) and the **rainman lane = ON**
-   path (validation ran lane-off). Both are low-risk but unproven like the core.
+3. **Several paths designed but not yet run end-to-end:** the additive
+   scaffolding of must-haves (A7), the `settings.json` hook-**merge** (the test
+   repo proposed no hooks), and the **rainman lane = ON** path (validation ran
+   lane-off). All low-risk but unproven like the core subtractive flow.
 4. **The token number is a rough `chars/4` estimate**, and the optional
    `/context` · `/memory` reconciliation is a heuristic cross-check, not a parser
    to depend on (it's the most format-fragile seam as the platform evolves).
