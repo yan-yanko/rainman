@@ -1,14 +1,16 @@
 ---
 name: claude-migrate
 description: >-
-  Migrate an older repository to current Claude Code conventions — subtractively.
-  Use when a project predates today's CLAUDE.md / skills / hooks conventions and
-  feels "not built right for Claude": a bloated or missing CLAUDE.md, always-on
-  rules that eat the token budget, no runnable verify loop, or months of lost
-  context. It rewrites a lean, minimal-sufficient CLAUDE.md from the code,
-  relocates history/procedures/automation out of always-on context into
-  memory/skills/hooks, and measures the always-on token budget before vs after.
-  An optional rainman lane backfills lost context from git history.
+  Migrate an older repository to current Claude Code conventions — subtractively,
+  and safely. Use when a project predates today's CLAUDE.md / skills / hooks
+  conventions and feels "not built right for Claude": a bloated or missing
+  CLAUDE.md, always-on rules that eat the token budget, no runnable verify loop,
+  or months of lost context. It runs a READ-ONLY diagnosis first, emits a full
+  migration plan for one approval, and only then rewrites a lean,
+  minimal-sufficient CLAUDE.md from the code and relocates
+  history/procedures/automation out of always-on context into memory/skills/hooks
+  — measuring the always-on token budget before vs after. An optional rainman
+  lane backfills lost context from git history. Nothing mutates without approval.
 ---
 
 # claude-migrate
@@ -26,45 +28,53 @@ Being subtractive is only safe if the knowledge you strip has **somewhere to
 go**. Otherwise "subtractive" is just amnesia. So the core move is never
 *delete* — it's **relocate**: move content from *always-on* context (CLAUDE.md,
 paid every turn) to *on-demand* context (a skill, a hook, or memory — paid only
-when actually needed). Every phase below is an instance of that move.
+when actually needed). Every step below is an instance of that move — including
+what happens to the old CLAUDE.md itself.
 
-## Operating rules (non-negotiable)
+## Safety model — READ THIS (the tool can rewrite CLAUDE.md)
 
-1. **Lean on living built-ins, not hardcoded checks.** Call `/init`, ask the
-   user for `/context` and `/memory` output — don't reimplement them. Hardcoded
-   feature checks rot every platform release; built-ins and code-reading don't.
-2. **Every non-deterministic change is behind a human approval gate.** Deciding
-   *what* to prune and *what becomes a rule vs skill vs hook vs memory* is
-   Claude's judgment over the repo. Always show before/after and STOP for
-   explicit approval before writing.
-3. **Measure before and after.** A migration that can't show the always-on
-   token budget dropping (with knowledge preserved) didn't happen.
-4. **Never drop knowledge silently.** Anything cut from CLAUDE.md must land in a
-   named destination (skill / hook / memory / a non-always-on doc) or be listed
-   in the report. No quiet deletions.
+This skill can overwrite your project's most important file. It is built so that
+is never destructive and never silent:
 
-## Phases
+1. **Diagnose is read-only.** The diagnosis phase makes exactly one write — the
+   plan file — and touches nothing else: not CLAUDE.md, not settings.json, not
+   memory. It is designed to run under Claude Code's **plan mode**.
+2. **Nothing mutates without one explicit approval** of a *complete* plan that
+   includes the verbatim proposed CLAUDE.md, the full relocation table, and the
+   projected before/after numbers. Approving the plan = approving the exact bytes.
+3. **Apply refuses to run on a dirty git tree.** A clean tree is a precondition,
+   so every change lands as a reviewable diff and `git restore .` (or a branch
+   reset) is a complete undo. Git is the safety net, not the approval prompt.
+4. **The old CLAUDE.md is archived, never deleted** — moved to `.claude/archive/`
+   (and/or into memory) before the new one is written.
+5. **settings.json is merged, never overwritten.** Show the hook diff; abort on
+   any conflict rather than clobbering existing hooks.
+6. **Proof of no harm.** Capture the verify-loop (tests + lint) result *before*
+   apply; it must be **no worse** *after*. Green-before / red-after means the
+   migration broke something → stop and surface it; the clean tree makes rollback
+   one command.
 
-Deterministic phases (1, 5) are bash/measurement. Judgment phases (0?, 2, 3, 4)
-read the repo and require approval. Phase 0 and Phase 6 are the optional rainman
-lane.
+If any guarantee above can't be met (no git, tree won't come clean, verify loop
+can't run), say so and stop — don't proceed in a degraded mode.
 
-### Phase 0 — Backfill lost context (optional, rainman lane)
+## Two modes
 
-Run only if the rainman lane is on (see "rainman lane" below). This captures the
-project's history *before* anything is pruned, so the lean rewrite isn't
-throwing 18 months of decisions away — they've been banked first.
+`Diagnose (read-only)  →  ⛔ one approval gate  →  Apply (after approval)`
 
-```bash
-rainman init
-rainman ingest --git --files     # mine commit history + structure into memory
-rainman status                   # confirm what got captured
-```
+Default to **Diagnose only**. Proceed to Apply solely on explicit approval (or
+an `--apply` argument that still re-confirms the plan).
 
-### Phase 1 — Measure the "before" (deterministic)
+---
 
-Establish the baseline. This is the brittle seam, so keep it file-based and
-robust; treat slash-command output as an optional cross-check, not a dependency.
+## Mode 1 — Diagnose (read-only)
+
+> Only write in this entire mode: the plan file. Nothing else is created,
+> edited, moved, or deleted.
+
+### D1. Measure the baseline (deterministic)
+
+File-based and robust; slash-command output is an optional cross-check, never a
+dependency (it's the most format-fragile seam).
 
 ```bash
 # --- Claude-readiness measurement (rough; chars/4 token estimate) ---
@@ -96,89 +106,111 @@ grep -avE '^\s*$' "$root/CLAUDE.md" 2>/dev/null | sort | uniq -d | head
 ```
 
 Optionally ask the user to paste `/context` and `/memory` from a fresh session
-to reconcile what *actually* loads against this file-based estimate. If the
-formats have drifted, trust the files — don't fail on the parse.
+to reconcile what *actually* loads. If the formats have drifted, trust the
+files — don't fail on the parse.
 
-Record the numbers. They are the "before" column of the final report.
+### D2. Draft the migration plan (judgment — still no mutations)
 
-### Phase 2 — Rewrite CLAUDE.md from the code (judgment → approval)
+Read the **code** (not the old CLAUDE.md — that's the bloat) and produce a lean,
+minimal-sufficient CLAUDE.md by applying the rubric below. Draft it *into the
+plan* — do **not** run any command that writes CLAUDE.md in this mode. (`/init`
+is the right generator, but it writes to disk, so it belongs in Apply against a
+clean tree, where its output is a reviewable diff.)
 
-Do **not** edit the old CLAUDE.md — it's the bloat. Start fresh from the code.
+Emit the plan — present it inline **and** save it to `docs/claude-migrate-plan.md`
+(a new file; the only write this mode makes). The plan must contain:
 
-1. Invoke the built-in `/init` (via the Skill tool) to generate a first-pass
-   CLAUDE.md from the current codebase. Don't reimplement it.
-2. Apply the **subtractive rubric** (below) to that draft: cut everything that
-   isn't a true always-on invariant or the verify loop.
-3. Diff new vs old. **STOP. Show the diff and the projected token delta. Get
-   approval.**
+- **Before** numbers from D1.
+- **The verbatim proposed lean CLAUDE.md**, in full.
+- **The relocation table** (every block leaving CLAUDE.md → its destination; see
+  rubric). Nothing cut without a named destination.
+- **Projected After** numbers.
+- **Apply preview**: exactly which files get created / archived / merged, and
+  whether the rainman lane is on.
 
-### Phase 3 — Classify the overflow (judgment → approval)
+End with: *"This was read-only — only the plan file was written. Approve to
+apply."* Then STOP.
 
-For every block in the *old* CLAUDE.md that didn't survive the lean rewrite,
-assign exactly one destination. This is the "rule vs skill vs hook" decision
-with a fourth bucket — **memory** — added:
+---
 
-| Bucket | What goes here | Where it lands |
-|--------|----------------|----------------|
-| **rule** | true always-on invariant ("never add a dependency") | stays in CLAUDE.md |
-| **skill** | a multi-step procedure you repeat | `.claude/skills/<name>/SKILL.md` |
-| **hook** | an automation ("after editing, run X") | `.claude/settings.json` hook |
-| **memory** | history, rationale, "we tried X and it broke", gotchas | rainman (lane on) / `docs/DECISIONS.md` (lane off) |
+## ⛔ Approval gate
 
-Most prunable content is **memory** — it's not a rule, skill, or hook; it's
-recall. Present the full classification table. **STOP for approval.**
+The human reviews the plan. Do not continue to Apply without explicit approval.
+If they want changes, revise the plan in Diagnose and re-present — still no
+mutations.
 
-### Phase 4 — Apply (judgment → approval, per write)
+---
 
-Write the approved artifacts:
+## Mode 2 — Apply (only after approval)
 
-- New lean CLAUDE.md.
-- New skills / hooks as classified.
-- **memory bucket, lane on:** add the hand-written rationale that lived in
-  CLAUDE.md as explicit memories (git-derived history was already captured in
-  Phase 0):
+### A0. Preconditions (refuse if unmet)
+
+- `git rev-parse --is-inside-work-tree` succeeds and `git status --porcelain` is
+  **empty**. If dirty: stop and ask the user to commit/stash first.
+- Run the verify loop and record the baseline pass/fail set. If it's already
+  red, surface that — the "no worse after" check needs an honest baseline.
+
+### A1. Backfill lost context (rainman lane on only — additive)
+
+```bash
+rainman init
+rainman ingest --git --files     # mine commit history + structure into memory
+rainman status
+```
+
+### A2. Archive the old CLAUDE.md (move, never delete)
+
+```bash
+mkdir -p .claude/archive
+[ -f CLAUDE.md ] && cp CLAUDE.md ".claude/archive/CLAUDE.$(date +%Y%m%d).md"
+```
+
+### A3. Write the new lean CLAUDE.md
+
+Write the **approved** content from the plan (you may seed with `/init` first,
+but the approved bytes win). Don't improvise new content here — Apply executes
+the plan, it doesn't re-decide it.
+
+### A4. Create skills / hooks (additive; merge, don't clobber)
+
+- New skills → `.claude/skills/<name>/SKILL.md`.
+- Hooks → **merge** into `.claude/settings.json`; show the diff; abort on conflict.
+
+### A5. Relocate the memory bucket
+
+- **Lane on:** add the hand-written rationale that lived in CLAUDE.md as explicit
+  memories (git-derived history was captured in A1):
   ```bash
   rainman add "Chose JSON store over SQLite for zero-dep; SQLite is opt-in" -c decision
   ```
-- **memory bucket, lane off:** append to a non-always-on `docs/DECISIONS.md`.
-  This still wins subtractively (it's out of always-on context) — rainman is
-  just the *better* destination (on-demand, task-conditioned recall) when present.
+- **Lane off:** append to a non-always-on `docs/DECISIONS.md`. Still a subtractive
+  win (out of always-on context); rainman is just the better destination.
 
-Show each write before making it.
+### A6. Re-measure, re-verify, present the diff
 
-### Phase 5 — Measure the "after" (deterministic)
-
-Re-run the Phase 1 script. Report a before/after table:
+- Re-run D1 → the "After" column.
+- Re-run the verify loop → must be **no worse** than the A0 baseline.
+- Present the full `git diff` and the before/after table. Undo = `git restore .`
+  or reset the branch.
 
 ```
                      before    after
 always-on tokens     ~4,200    ~1,150
 always-on directives     38         9
 duplicate lines           6         0
-verify loop documented   no       yes
+verify loop              pass      pass    <- must not regress
 knowledge relocated        —   23 items → skills/hooks/memory
 ```
 
-The headline is the always-on token budget dropping **with no knowledge lost** —
-the cost moved from per-turn to per-recall.
+Headline: always-on budget drops with **no knowledge lost** and **no test
+regressed** — cost moved from per-turn to per-recall.
 
-### Phase 6 — Hand off auto-memory (optional, rainman lane)
-
-You can't enforce ex-ante what Claude will learn in a session — so don't try.
-Just wire the curated auto-memory layer and let it run:
-
-```bash
-rainman setup     # registers salience-gated, redacted, trust-leveled auto-learn hooks
-```
-
-The most you can do at migration time is *nudge* the write-side logic ("don't
-record facts discoverable from the code") — which is what rainman's salience
-gate already enforces. Leave it on; let it accumulate.
+---
 
 ## The subtractive rubric
 
-Score the migrated repo. **Higher = leaner.** Direction is the whole point:
-penalize additive bloat, reward minimal-sufficient.
+Score the migrated repo. **Higher = leaner.** Penalize additive bloat, reward
+minimal-sufficient.
 
 Reward (each lowers the always-on cost):
 - CLAUDE.md is **minimal-sufficient** — only invariants + how-to-verify are
@@ -191,12 +223,22 @@ Reward (each lowers the always-on cost):
 
 **Sufficiency floor (hard gates — fail regardless of leanness):**
 - The verify loop (test + lint command) is documented and runnable.
-- The genuine hard rules (the invariants that, if broken, break the project)
-  are present in CLAUDE.md.
+- The genuine hard rules (invariants that, if broken, break the project) are
+  present in CLAUDE.md.
 
 The floor is why "less is better" can't degenerate into an empty file. You can
-push *close* to minimal precisely because the overflow has a home — that home is
-the memory lane.
+push *close* to minimal precisely because the overflow has a home — memory.
+
+### Relocation buckets
+
+| Bucket | What goes here | Where it lands |
+|--------|----------------|----------------|
+| **rule** | true always-on invariant ("never add a dependency") | stays in CLAUDE.md |
+| **skill** | a multi-step procedure you repeat | `.claude/skills/<name>/SKILL.md` |
+| **hook** | an automation ("after editing, run X") | `.claude/settings.json` hook |
+| **memory** | history, rationale, "we tried X and it broke", gotchas | rainman (lane on) / `docs/DECISIONS.md` (lane off) |
+
+Most prunable content is **memory** — it's not a rule, skill, or hook; it's recall.
 
 ## rainman lane (optional, gated)
 
@@ -205,21 +247,23 @@ skill/hook relocation, and the before/after measurement, sending memory-bucket
 content to `docs/DECISIONS.md`. rainman is the opt-in *deepening* for the
 context-retention half:
 
-- **on** → Phase 0 backfill + Phase 6 auto-memory + memory bucket → `rainman add`.
-- **off** → memory bucket → `docs/DECISIONS.md`; skip Phases 0 and 6.
+- **on** → A1 backfill + A5 `rainman add` + `rainman setup` to wire
+  salience-gated, redacted, trust-leveled auto-learn hooks.
+- **off** → memory bucket → `docs/DECISIONS.md`; skip A1 and the setup step.
 
 Enable when the user passes `--with-rainman`, or auto-detect with
-`command -v rainman`. Default to **off** so the migration tool stays lean and
-built-in-leaning and never forces an external install on someone who only wants
-the scaffolding pass. (This mirrors rainman's own architecture, where the
-semantic lane is opt-in for the same reason.)
+`command -v rainman`. Default **off** so the migration tool stays lean and never
+forces an external install on someone who only wants the scaffolding pass. (This
+mirrors rainman's own architecture, where the semantic lane is opt-in.)
 
 ## Limits (be honest in the report)
 
-1. **Auto-memory is not enforceable ahead of time.** Phase 6 can only enable and
-   nudge curation; it can't guarantee what gets learned. Stated, not hidden.
+1. **Auto-memory is not enforceable ahead of time.** Wiring the hooks can only
+   enable and nudge curation ("don't record facts discoverable from the code" —
+   what rainman's salience gate already enforces); it can't guarantee what gets
+   learned. Stated, not hidden.
 2. **Version fragility.** rainman's recall/data substrate is external stdlib and
    ages slowly, but its *hook wiring* rides the same versioned Claude Code hook
-   surface everything else does — it is not immune. And the Phase 1/5 slash-command
-   reconciliation is the single most format-fragile step; that's why it's a
-   cross-check, not a dependency.
+   surface everything else does — not immune. And the D1 slash-command
+   reconciliation is the most format-fragile step; that's why it's a cross-check,
+   not a dependency.
