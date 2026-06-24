@@ -1,8 +1,8 @@
 # claude-migrate — Migration Plan (DIAGNOSE output)
 
-> **Read-only run.** Producing this file is the *only* write performed. No source
-> file, `settings.json`, or memory was touched. Nothing else happens without your
-> approval of this plan.
+> **Non-mutating run.** The only write is creating this new advisory file — it
+> changes nothing that already exists: not a source file, not `settings.json`,
+> not memory. Nothing else happens without your approval of this plan.
 
 Target: `rainman` (this repo). rainman lane: **ON** (dogfooding — relocated
 rationale goes into rainman's own memory).
@@ -159,5 +159,5 @@ Pick one before Apply.
 
 ## Approve to apply
 
-This was read-only — only this plan file was written. Reply to approve (and pick
-§6), or ask for plan changes (still no mutations).
+This was a non-mutating run — the only write created this plan file. Reply to
+approve (and pick §6), or ask for plan changes (still no mutations).

@@ -5,12 +5,13 @@ description: >-
   and safely. Use when a project predates today's CLAUDE.md / skills / hooks
   conventions and feels "not built right for Claude": a bloated or missing
   CLAUDE.md, always-on rules that eat the token budget, no runnable verify loop,
-  or months of lost context. It runs a READ-ONLY diagnosis first, emits a full
+  or months of lost context. This is NOT a checklist of files to add — it shrinks
+  always-on context, relocating rules/history/automation out of CLAUDE.md into
+  skills/hooks/memory. It runs a non-mutating diagnosis first, emits a full
   migration plan for one approval, and only then rewrites a lean,
-  minimal-sufficient CLAUDE.md from the code and relocates
-  history/procedures/automation out of always-on context into memory/skills/hooks
-  — measuring the always-on token budget before vs after. An optional rainman
-  lane backfills lost context from git history. Nothing mutates without approval.
+  minimal-sufficient CLAUDE.md from the code — measuring the always-on token
+  budget before vs after. An optional rainman lane backfills lost context from
+  git history. Nothing mutates without approval.
 ---
 
 # claude-migrate
@@ -34,11 +35,14 @@ what happens to the old CLAUDE.md itself.
 ## Safety model — READ THIS (the tool can rewrite CLAUDE.md)
 
 This skill can overwrite your project's most important file. It is built so that
-is never destructive and never silent:
+it is never destructive and never silent:
 
-1. **Diagnose is read-only.** The diagnosis phase makes exactly one write — the
-   plan file — and touches nothing else: not CLAUDE.md, not settings.json, not
-   memory. It is designed to run under Claude Code's **plan mode**.
+1. **Diagnose mutates nothing that exists.** The only write it makes is creating
+   one new file — the plan (`docs/claude-migrate-plan.md`). It never edits, moves,
+   or deletes anything: not CLAUDE.md, not settings.json, not memory.
+   Plan-mode-compatible in spirit — the single new-file write is the deliverable,
+   not a mutation of project state. (Non-mutating ≠ zero-write: a fresh advisory
+   doc is fully discardable and changes nothing about existing project state.)
 2. **Nothing mutates without one explicit approval** of a *complete* plan that
    includes the verbatim proposed CLAUDE.md, the full relocation table, and the
    projected before/after numbers. Approving the plan = approving the exact bytes.
@@ -59,17 +63,17 @@ can't run), say so and stop — don't proceed in a degraded mode.
 
 ## Two modes
 
-`Diagnose (read-only)  →  ⛔ one approval gate  →  Apply (after approval)`
+`Diagnose (non-mutating)  →  ⛔ one approval gate  →  Apply (after approval)`
 
 Default to **Diagnose only**. Proceed to Apply solely on explicit approval (or
 an `--apply` argument that still re-confirms the plan).
 
 ---
 
-## Mode 1 — Diagnose (read-only)
+## Mode 1 — Diagnose (non-mutating)
 
-> Only write in this entire mode: the plan file. Nothing else is created,
-> edited, moved, or deleted.
+> The only write in this entire mode is creating one new file — the plan. Nothing
+> that already exists is edited, moved, or deleted.
 
 ### D1. Measure the baseline (deterministic)
 
@@ -112,10 +116,11 @@ files — don't fail on the parse.
 ### D2. Draft the migration plan (judgment — still no mutations)
 
 Read the **code** (not the old CLAUDE.md — that's the bloat) and produce a lean,
-minimal-sufficient CLAUDE.md by applying the rubric below. Draft it *into the
-plan* — do **not** run any command that writes CLAUDE.md in this mode. (`/init`
-is the right generator, but it writes to disk, so it belongs in Apply against a
-clean tree, where its output is a reviewable diff.)
+minimal-sufficient CLAUDE.md by applying the rubric below — drafted **by hand
+from the code**, authored directly *into the plan*. `/init`'s output can serve as
+a mental starting structure, but since this mode writes nothing but the plan,
+`/init` is **not run here** — and per A3 it is **not run in Apply either**. The
+plan's bytes are the single source of truth.
 
 Emit the plan — present it inline **and** save it to `docs/claude-migrate-plan.md`
 (a new file; the only write this mode makes). The plan must contain:
@@ -128,8 +133,8 @@ Emit the plan — present it inline **and** save it to `docs/claude-migrate-plan
 - **Apply preview**: exactly which files get created / archived / merged, and
   whether the rainman lane is on.
 
-End with: *"This was read-only — only the plan file was written. Approve to
-apply."* Then STOP.
+End with: *"Non-mutating run — the only write was creating this plan file.
+Approve to apply."* Then STOP.
 
 ---
 
@@ -167,9 +172,10 @@ mkdir -p .claude/archive
 
 ### A3. Write the new lean CLAUDE.md
 
-Write the **approved** content from the plan (you may seed with `/init` first,
-but the approved bytes win). Don't improvise new content here — Apply executes
-the plan, it doesn't re-decide it.
+Write the approved content from the plan, **byte-for-byte**. Apply executes the
+plan; it does not regenerate or re-decide content. **Do not run `/init` here** —
+any generator output would risk diverging from the approved bytes, breaking the
+"approving the plan = approving the exact bytes" guarantee.
 
 ### A4. Create skills / hooks (additive; merge, don't clobber)
 
