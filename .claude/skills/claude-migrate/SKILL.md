@@ -99,8 +99,12 @@ echo "## .claude/ inventory (skills, agents, commands, settings)"
 [ -d "$root/.claude" ] && find "$root/.claude" -maxdepth 2 -type f | sort || echo "  (none)"
 
 echo "## Verify loop present? (the most important gap on old repos)"
-grep -aiE 'pytest|npm (run )?test|cargo test|go test|make test|ruff|eslint|lint' \
-  "$root/CLAUDE.md" "$root/README"* 2>/dev/null | head -3 || echo "  NOT documented — fix first"
+# Heuristic: matches a test/lint command mentioned anywhere in CLAUDE.md/README.
+# Capture-then-test so the "not documented" branch actually fires — a trailing
+# `| head` would mask grep's exit code and make the `|| echo` fallback dead code.
+vloop=$(grep -aiE 'pytest|unittest|npm (run )?test|cargo test|go test|make test|tox|ruff|eslint|biome|lint' \
+  "$root/CLAUDE.md" "$root/README"* 2>/dev/null | head -3)
+if [ -n "$vloop" ]; then echo "$vloop"; else echo "  NOT documented — fix first"; fi
 
 echo "## Always-on directive count (heuristic — lower is better)"
 grep -aciE '\b(must|never|always|do ?n.t|required|important)\b' "$root/CLAUDE.md" 2>/dev/null
@@ -154,6 +158,11 @@ mutations.
   **empty**. If dirty: stop and ask the user to commit/stash first.
 - Run the verify loop and record the baseline pass/fail set. If it's already
   red, surface that — the "no worse after" check needs an honest baseline.
+- Heads-up: running the verify loop can create untracked build artifacts
+  (`__pycache__/`, `.pytest_cache/`, coverage files, etc.). Confirm they're
+  gitignored so the A6 diff stays clean and the clean-tree guarantee isn't
+  tripped by test output — if the repo doesn't ignore them, adding a `.gitignore`
+  entry is itself a valid migration fix.
 
 ### A1. Backfill lost context (rainman lane on only — additive)
 
