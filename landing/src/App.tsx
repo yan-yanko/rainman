@@ -19,6 +19,14 @@ import {
   Code,
   ChevronRight,
   HelpCircle,
+  Shield,
+  Layers,
+  Database,
+  Target,
+  Sparkles,
+  FileText,
+  GitBranch,
+  Recycle,
 } from 'lucide-react';
 import { StaggeredFade } from './components/StaggeredFade';
 import { FadeDown } from './components/FadeDown';
@@ -84,6 +92,12 @@ export default function App() {
             className="text-sm text-white/50 hover:text-white/90 transition-colors"
           >
             How It Works
+          </a>
+          <a
+            href="#depth"
+            className="text-sm text-white/50 hover:text-white/90 transition-colors"
+          >
+            Depth
           </a>
           <a
             href="#integration"
@@ -225,11 +239,11 @@ export default function App() {
         {/* Bottom badges */}
         <FadeDown delay={1.2}>
           <div className="flex items-center justify-center gap-4 md:gap-8 py-8 md:py-12 text-[10px] md:text-xs text-white/50 uppercase tracking-wider">
-            <span>143 tests</span>
+            <span>268 tests</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>0 dependencies</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
-            <span>&lt;3s test suite</span>
+            <span>Python 3.10+</span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span>MIT license</span>
           </div>
@@ -443,7 +457,7 @@ export default function App() {
               {
                 icon: Search,
                 title: 'Keyword Match',
-                body: 'Overlap between query and memory content, tags, and file references. Capped rehearsal boost for frequently accessed memories (max 2x) prevents stale memories from dominating.',
+                body: 'IDF-weighted overlap over a Porter-stemmed, stopword-filtered token index (content, tags, file refs) — rare terms outweigh common ones (BM25’s principle) and "authenticate"/"authentication" collapse to one stem. Capped rehearsal boost (max 2x) stops stale memories from dominating.',
                 weight: '0.35',
               },
               {
@@ -461,7 +475,7 @@ export default function App() {
               {
                 icon: Link,
                 title: 'Associative',
-                body: 'New memories auto-link to existing ones when keyword overlap exceeds 25%. Phase 1 finds top results by keyword/recency/importance. Phase 2 boosts memories linked to those top results. No embeddings, no vectors — developers use consistent terminology, so keyword overlap works.',
+                body: 'New memories auto-link at 25% keyword overlap. Recall is two-phase: phase 1 finds top results, phase 2 diffuses 2-hop spreading activation through the link graph so graph-connected memories get boosted (capped). Stemmed, windowless, file + tag edges — no embeddings required.',
                 weight: '0.20',
               },
             ].map((card, i) => (
@@ -478,6 +492,92 @@ export default function App() {
                       w: {card.weight}
                     </span>
                   </div>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {card.body}
+                  </p>
+                </div>
+              </FadeDown>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3b: Depth — beyond keyword matching */}
+      <section id="depth" className="py-20 md:py-28 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <FadeDown>
+            <p className="text-xs uppercase tracking-wider text-accent mb-4">
+              Beyond Keyword Matching
+            </p>
+          </FadeDown>
+          <FadeDown delay={0.1}>
+            <h2 className="text-3xl md:text-4xl font-semibold text-[#e8e8ed] mb-6">
+              Memory that reasons about your task
+            </h2>
+          </FadeDown>
+          <FadeDown delay={0.2}>
+            <p className="text-white/60 max-w-2xl mb-12 leading-relaxed">
+              The four-signal score is the floor, not the ceiling. Rainman pairs
+              failures with their fixes, conditions recall on what you're working
+              on right now, and keeps the store clean, safe, and auditable — all
+              still with zero LLM calls.
+            </p>
+          </FadeDown>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              {
+                icon: Sparkles,
+                title: 'Experience cards',
+                body: 'Typed-causal memory: a failing command is stored as an open failure, then auto-paired with the later run that fixes it on the same files. The fix surfaces with the failure next time.',
+              },
+              {
+                icon: Target,
+                title: 'Task-aware recall',
+                body: 'Pass the files in play and the current error signature — memories whose file refs or stored problem match get boosted and pass the relevance floor, so the fix for this error in this file surfaces regardless of wording.',
+              },
+              {
+                icon: Recycle,
+                title: 'Consolidation',
+                body: 'Near-duplicates merge instead of piling up, and a newer memory can supersede an outdated one. The store stays dense and current without manual pruning.',
+              },
+              {
+                icon: Sparkles,
+                title: 'Optional semantic lane',
+                body: 'Install the rainman[semantic] extra and a small CPU-only local embedding model fuses with the lexical ranking (RRF), closing the synonym/abbreviation gap ("auth" ≈ "authentication"). Core stays pure-lexical and zero-dep.',
+              },
+              {
+                icon: Shield,
+                title: 'Trust & poisoning defense',
+                body: 'Every memory carries a trust level (user > hook > ingest) from its source. Ingested content is held out of unsolicited auto-injection and gets no rehearsal amplifiers; secrets are redacted before storage.',
+              },
+              {
+                icon: FileText,
+                title: 'Audit & policy plane',
+                body: 'Opt-in append-only JSONL audit log of every store/recall/forget, plus an org > project > user policy plane with non-overridable enforce mandates for teams.',
+              },
+              {
+                icon: Database,
+                title: 'Pluggable storage',
+                body: 'Layered JSON by default (git-committable, atomic writes, file locking). Switch to an indexed SQLite backend (WAL, no 2,000-cap) with a single rainman migrate command.',
+              },
+              {
+                icon: GitBranch,
+                title: 'Team sync (optional)',
+                body: 'Push/pull the project layer to a self-hosted sync server (separate repo) — RBAC, SSO, encryption-at-rest. The global layer is personal and never leaves your machine.',
+              },
+              {
+                icon: Layers,
+                title: 'IR-gated quality',
+                body: 'Retrieval quality is guarded by a gold-set eval harness (recall@k, MRR, nDCG) on paraphrased queries — regressions fail CI, not your debugging session.',
+              },
+            ].map((card, i) => (
+              <FadeDown key={card.title} delay={0.2 + i * 0.05}>
+                <div className="liquid-glass rounded-xl p-6 h-full">
+                  <card.icon className="w-5 h-5 text-accent mb-4" />
+                  <h3 className="text-[#e8e8ed] font-medium mb-2">
+                    {card.title}
+                  </h3>
                   <p className="text-white/60 text-sm leading-relaxed">
                     {card.body}
                   </p>
@@ -531,7 +631,8 @@ export default function App() {
                 </h3>
                 <p className="text-white/60 text-sm mb-4 leading-relaxed">
                   init, add, recall, status, links, context, ingest, export,
-                  serve. Works standalone or alongside MCP.
+                  serve, setup, doctor, review, migrate, remote, sync. Works
+                  standalone or alongside MCP.
                 </p>
                 <div className="bg-black/40 rounded-lg p-4 font-mono text-sm text-white/70 space-y-1">
                   <p>$ rainman add "Fixed OOM on Railway — use semaphore(2)"</p>
@@ -757,7 +858,7 @@ export default function App() {
                     <p className="text-accent">&#10003; MCP server</p>
                     <p className="text-accent">&#10003; Config valid</p>
                     <p className="mt-2 text-white/50">
-                      14 passed, 0 failed
+                      12 passed, 0 failed — Rainman is healthy!
                     </p>
                   </div>
                 </div>
@@ -876,7 +977,7 @@ export default function App() {
               },
               {
                 q: 'What scale does it handle?',
-                a: 'Hard cap at 2,000 memories with auto-prune. Tested on 307 memories — recall returns in milliseconds. Built for a single project, not enterprise search.',
+                a: 'The default JSON backend caps at 2,000 memories with auto-prune; switch to the indexed SQLite backend (rainman migrate --to sqlite) to remove the cap. Tested on 307 memories — recall returns in milliseconds. Built for a single project, not enterprise search.',
               },
               {
                 q: "How does it compare to Obsidian's graph?",
@@ -908,7 +1009,7 @@ export default function App() {
               },
               {
                 q: 'How well tested is it?',
-                a: "143 unit tests across 9 test files, including concurrency, corruption recovery, and input validation tests. CI runs ruff linting + pytest on Python 3.10, 3.11, and 3.12 on every push. Zero external dependencies means zero supply chain risk.",
+                a: "268 unit tests across 24 test files, including concurrency, corruption recovery, trust/poisoning, retrieval-quality, and input validation tests. CI runs ruff linting + pytest on Python 3.10, 3.11, and 3.12 on every push. Zero external dependencies means zero supply chain risk.",
               },
             ].map((item, i) => (
               <FadeDown key={i} delay={0.1 + i * 0.05}>
