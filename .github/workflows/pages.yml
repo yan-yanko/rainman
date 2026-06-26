@@ -1,0 +1,67 @@
+name: Deploy landing page
+
+# Builds the React landing app (landing/) into docs/ and publishes it to
+# GitHub Pages. The live site is therefore ALWAYS a fresh build from source —
+# it can't drift from landing/src/. Runs on pushes to main that touch the
+# landing app, and can be triggered manually.
+#
+# IMPORTANT: this uses the "GitHub Actions" Pages source. Set it once under
+# Settings -> Pages -> Build and deployment -> Source = GitHub Actions.
+# (If Pages is still set to "Deploy from a branch /docs", this workflow won't
+# take effect until the source is switched.)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; cancel in-progress runs for the same ref.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Install dependencies
+        working-directory: landing
+        run: npm ci
+
+      - name: Build (landing/ -> docs/)
+        working-directory: landing
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
