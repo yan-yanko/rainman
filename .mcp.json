@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "rainman": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-m",
+        "rainman",
+        "serve"
+      ]
+    }
+  }
+}

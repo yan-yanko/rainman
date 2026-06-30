@@ -18,6 +18,11 @@ import sys
 
 
 def main():
+    # CLI commands print memory content, which may be non-ASCII (e.g. Hebrew);
+    # Windows' default cp1252 stdout would crash on it. Force UTF-8 first.
+    from rainman.core.encoding import ensure_utf8_io
+    ensure_utf8_io()
+
     parser = argparse.ArgumentParser(
         prog="rainman",
         description="Context-aware project memory for AI coding tools",

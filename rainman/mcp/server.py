@@ -333,9 +333,10 @@ def run_server():
     """Main loop: read JSON-RPC from stdin, write responses to stdout."""
     server = RainmanMCPServer()
 
-    # Ensure stdout is line-buffered for stdio transport
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    # JSON-RPC framing is UTF-8; force it on stdout/stderr so non-ASCII memory
+    # content can never crash the transport on Windows (cp1252) default.
+    from rainman.core.encoding import ensure_utf8_io
+    ensure_utf8_io()
 
     for line in sys.stdin:
         line = line.strip()

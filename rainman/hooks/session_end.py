@@ -112,6 +112,11 @@ DEDUP_SCORE_THRESHOLD = 0.8
 
 
 def main():
+    # Force UTF-8 stdio so non-ASCII transcript content can't crash logging on
+    # Windows (cp1252) — this hook is silent but still writes to stderr.
+    from rainman.core.encoding import ensure_utf8_io
+    ensure_utf8_io()
+
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:

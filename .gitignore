@@ -7,5 +7,16 @@ build/
 .eggs/
 *.egg
 .pytest_cache/
-.rainman/
 *.tmp
+
+# Rainman: the project layer is the documented "git-committable" memory, so
+# .rainman/memories.json, config.json and sync_state.json stay TRACKABLE
+# (commit them to share project memory, or sync via `rainman sync`).
+# Only volatile/local/secret files under it are ignored:
+.rainman/*.lock
+.rainman/*.tmp
+.rainman/memories.db
+.rainman/memories.db-wal
+.rainman/memories.db-shm
+.rainman/sync_credentials.json
+.rainman/audit*.jsonl

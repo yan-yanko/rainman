@@ -37,6 +37,12 @@ import sys
 
 
 def main():
+    # Windows stdout defaults to cp1252, which can't encode non-ASCII context
+    # (Hebrew, "→"); the resulting UnicodeEncodeError exits non-zero and Claude
+    # Code surfaces it as a startup hook error. Force UTF-8 so context emits.
+    from rainman.core.encoding import ensure_utf8_io
+    ensure_utf8_io()
+
     # Read hook input from stdin
     try:
         hook_input = json.loads(sys.stdin.read())

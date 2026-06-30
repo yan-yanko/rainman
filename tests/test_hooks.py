@@ -31,8 +31,13 @@ def project_dir(tmp_path):
     return project, global_dir
 
 
-def _run_hook(module, stdin_data, cwd, env_extra=None):
-    """Run a hook module via subprocess with given stdin, isolated from real ~/.rainman/."""
+def _run_hook(module, stdin_data, cwd, env_extra=None, capture_encoding=None):
+    """Run a hook module via subprocess with given stdin, isolated from real ~/.rainman/.
+
+    ``capture_encoding`` forces how the parent decodes the child's output; pass
+    "utf-8" when the child may emit non-ASCII so the test itself can't choke on
+    it (used alongside env PYTHONIOENCODING to simulate a legacy stdout codec).
+    """
     env = os.environ.copy()
     # Isolate from real ~/.rainman/ — use subdir so global != project
     fakehome = os.path.join(cwd, "_fakehome")
@@ -41,6 +46,7 @@ def _run_hook(module, stdin_data, cwd, env_extra=None):
     env["HOME"] = fakehome
     if env_extra:
         env.update(env_extra)
+    extra = {"encoding": capture_encoding, "errors": "replace"} if capture_encoding else {}
     result = subprocess.run(
         [PYTHON, "-m", module],
         input=json.dumps(stdin_data) if isinstance(stdin_data, dict) else stdin_data,
@@ -49,6 +55,7 @@ def _run_hook(module, stdin_data, cwd, env_extra=None):
         cwd=cwd,
         env=env,
         timeout=30,
+        **extra,
     )
     return result
 
@@ -263,6 +270,28 @@ class TestPostToolUse:
         assert result.returncode == 0
         assert "failed to parse" in result.stderr.lower()
 
+    def test_absolute_file_ref_stored_relative(self, project_dir):
+        """Auto-learn must store project-relative refs, not absolute local paths
+        (portable across machines + no username/path leak when committed)."""
+        project, global_dir = project_dir
+        abs_path = os.path.join(project, "services", "auth.py")
+        hook_input = {
+            "tool_name": "Edit",
+            "cwd": project,
+            "tool_input": {
+                "file_path": abs_path,
+                "old_string": "def login(user):",
+                "new_string": "def login(user, remember=False):",
+            },
+            "tool_output": "File edited successfully",
+        }
+        result = _run_hook("rainman.hooks.post_tool_use", hook_input, project)
+        assert result.returncode == 0
+        memories = _load_memories(project)
+        assert len(memories) == 1
+        assert memories[0]["file_refs"] == ["services/auth.py"]
+        assert project not in memories[0]["file_refs"][0]
+
 
 @pytest.mark.unit
 class TestSessionStart:
@@ -310,6 +339,41 @@ class TestSessionStart:
         project, global_dir = project_dir
         result = _run_hook("rainman.hooks.session_start", "{{broken", project)
         assert result.returncode == 0
+
+    def test_non_ascii_content_does_not_crash_on_legacy_codec(self, project_dir):
+        """Regression: Hebrew/non-ASCII memory content used to crash the hook on
+        a cp1252 stdout (Windows default) with UnicodeEncodeError, surfaced as a
+        startup hook error and dropping all injected context. Forcing the child
+        to cp1252 reproduces it on any platform; the UTF-8 fix must survive it."""
+        project, global_dir = project_dir
+        import time
+        memories = [{
+            "id": "rm_test_he",
+            "content": "האימות נכשל כי הטוקן פג תוקף → צריך לרענן את הטוקן",
+            "timestamp": time.time(),
+            "importance": 0.9,
+            "category": "solution",
+            "sentiment": "neutral",
+            "linked_ids": [],
+            "recall_count": 0,
+            "last_recalled": None,
+            "tags": [],
+            "source": "cli",
+            "file_refs": [],
+            "layer": "project",
+            "metadata": {},
+        }]
+        path = os.path.join(project, ".rainman", "memories.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(memories, f, ensure_ascii=False)
+
+        result = _run_hook(
+            "rainman.hooks.session_start", {"cwd": project}, project,
+            env_extra={"PYTHONIOENCODING": "cp1252"},
+            capture_encoding="utf-8",
+        )
+        assert result.returncode == 0
+        assert "[Rainman]" in result.stdout
 
 
 @pytest.mark.unit

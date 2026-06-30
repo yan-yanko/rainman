@@ -96,7 +96,7 @@ def main():
     # card, and a later success on the same files RESOLVES it into a paired
     # problem/fix card. This is the typed-causal write path, not a flat note.
     if tool_name == "Bash":
-        _handle_bash(engine, tool_input.get("command", ""), tool_output)
+        _handle_bash(engine, tool_input.get("command", ""), tool_output, cwd)
         sys.exit(0)
 
     # Read/Edit -> note captures.
@@ -105,6 +105,8 @@ def main():
         sys.exit(0)
 
     content, category, file_refs = learning
+    # Keep stored refs project-relative (portable + no absolute-path leak).
+    file_refs = [_project_relative(f, cwd) for f in file_refs]
 
     if len(content) < MIN_CONTENT_LENGTH:
         sys.exit(0)
@@ -162,7 +164,7 @@ def _paths_in_command(command: str) -> list:
     return out[:20]
 
 
-def _handle_bash(engine, command: str, tool_output) -> None:
+def _handle_bash(engine, command: str, tool_output, cwd=None) -> None:
     """Capture Bash test/build outcomes as typed-causal experience cards."""
     if not command:
         return
@@ -176,7 +178,8 @@ def _handle_bash(engine, command: str, tool_output) -> None:
     lowered = output_str.lower()
     failed = "failed" in lowered or "error" in lowered
     passed = "passed" in lowered or "success" in lowered
-    file_refs = _paths_in_command(command)
+    file_refs = [_project_relative(p, cwd) for p in _paths_in_command(command)] \
+        if cwd else _paths_in_command(command)
 
     if failed:
         problem = f"{command[:120]} — {output_str[:300]}"
@@ -256,6 +259,27 @@ def _short_path(path):
     if len(parts) > 3:
         return "/".join(parts[-3:])
     return path
+
+
+def _project_relative(path, root):
+    """Store file refs relative to the project root.
+
+    Auto-learn captures absolute tool paths (e.g.
+    ``C:\\Users\\me\\proj\\rainman\\core\\store.py``). Stored verbatim those
+    leak the local username/path layout when the project layer is committed,
+    and don't match on another machine. Rewriting to a repo-relative POSIX path
+    (``rainman/core/store.py``) keeps memories portable. Paths outside the
+    project tree are left as-is rather than emitting a ``..`` ladder.
+    """
+    if not path:
+        return path
+    try:
+        rel = os.path.relpath(path, root)
+    except (ValueError, OSError):
+        return path  # e.g. different drive on Windows
+    if rel.startswith("..") or os.path.isabs(rel):
+        return path
+    return rel.replace("\\", "/")
 
 
 if __name__ == "__main__":

@@ -30,6 +30,10 @@ import sys
 
 
 def main():
+    # Force UTF-8 stdio so non-ASCII re-injected memory can't crash on Windows.
+    from rainman.core.encoding import ensure_utf8_io
+    ensure_utf8_io()
+
     # Read compaction event from stdin
     try:
         hook_input = json.loads(sys.stdin.read())
