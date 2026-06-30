@@ -146,6 +146,53 @@ the point of a value-test — it pays for itself by catching this.
   when the store is far too big to dump into context (the token-cost column).
 - **Synthetic, small-N**, and the corpus/queries are hand-built. Not SWE-bench.
 
+## Companion: `sequential_memory_bench.py` — the non-tautological task-success setup
+
+`quillpay_demo.py` pre-seeds facts (the answer is in the injected card by
+construction). SWE-bench tasks are self-contained (memory can't help without
+seeding the answer). Both have a tautology problem. This benchmark avoids it by
+running a **causal chain** of tasks in one codebase where each later task depends
+on knowledge an **earlier task earned** — and a task's own knowledge enters the
+store **only after it runs**. So when task N is judged, the store holds what
+tasks 1..N-1 earned, never task N's own answer. (Guarded by
+`test_no_self_leak_is_non_tautological`.)
+
+Three arms, identical accumulated knowledge, differing only in retrieval:
+**no-memory** / **file-memory** (a fair, steelmanned grep over the markdown
+notes — content *and* file paths) / **Rainman** (`recall()`, task-state
+conditioned).
+
+Deterministic plumbing check (`python eval/local_demo/sequential_memory_bench.py --dry-run`):
+
+```
+task  requires            no-mem  file-mem  Rainman
+t1    (establishing)        PASS      PASS     PASS
+t2..t5 earned knowledge     fail      PASS     PASS
+
+resolved:  no-memory 1/5   file-memory 5/5   Rainman 5/5
+Rainman lift: +80.0pp vs no-memory   +0.0pp vs file-memory
+context precision:  file 4.6 items/~103 tok   vs   Rainman 2.8 items/~71 tok
+```
+
+**Honest reading.** The headline is **+80pp vs *no* memory** — the chain genuinely
+requires accumulated knowledge; a memoryless agent re-derives the wrong industry
+default 4/5 times. Against **file-memory**, at this small, vocabulary-overlapping
+scale it's a **tie on the binary "did the fact surface" check** — grep finds the
+same notes. The difference here is *precision*: Rainman's relevance floor injects
+~2.8 tight items where the top-k grep pads to ~4.6 (more noise for a real agent
+to wade through). Rainman's retrieval-**miss** wins — morphology, ranking under
+term-sharing distractors, scale/token-cost — are the separate
+`file_memory_vs_rainman.py` story, not this chain. We report the tie rather than
+engineer it away.
+
+**Why it still matters / next step.** The binary mock can't see whether a noisier
+5-note context *misleads* a real agent into using the wrong fact, or whether
+ranking the right card first changes the answer. That needs a real agent: run
+`--contexts`, drive fresh subagents on `prompt` vs `prompt + each arm's context`,
+record `{task_id: {none, file, rainman}}`, and `--grade` it (deterministic
+token-presence). That live run is the only thing that produces a real
+task-success number — this file ships none.
+
 ## Honest caveats — what this does NOT show
 
 - **N = 6, synthetic.** The facts were *designed* to be unguessable, so the

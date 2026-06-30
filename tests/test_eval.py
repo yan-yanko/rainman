@@ -121,3 +121,46 @@ class TestMemoryLiftHarness:
         report = compare_memory_on_off(engine, [], KeywordMockAgent({}))
         assert report["n"] == 0
         assert report["delta_pp"] == 0.0
+
+
+@pytest.mark.unit
+class TestSequentialBench:
+    """Guards for eval/local_demo/sequential_memory_bench.py — the
+    non-tautological, sequential, same-repo memory benchmark."""
+
+    def test_chain_is_memory_dependent(self):
+        """The point of the benchmark: a memoryless agent fails the dependent
+        tasks (it can't know the project's earned conventions), while an agent
+        with retrieval resolves them. If this stops holding, the chain no longer
+        tests memory."""
+        from eval.local_demo.sequential_memory_bench import _mock_run, score, CHAIN
+        result = score(_mock_run())
+        n = result["n"]
+        # Only the establishing task (no prior dep) is solvable with no memory.
+        assert result["resolved"]["none"] == 1
+        # Retrieval (Rainman) resolves the whole chain.
+        assert result["resolved"]["rainman"] == n
+        assert result["lift_vs_none_pp"] > 0
+        # Every non-establishing task requires earned knowledge.
+        assert sum(1 for s in CHAIN if s["requires"]) == n - 1
+
+    def test_no_self_leak_is_non_tautological(self):
+        """The core honesty invariant: a task's OWN earned knowledge must never
+        be in the context it is judged on — only EARLIER tasks' knowledge. The
+        required token may legitimately recur in a later task's context, but it
+        must be absent from the establishing task's own context for every arm."""
+        from eval.local_demo.sequential_memory_bench import build_cases, CHAIN, ARMS, _present
+        cases = {c["id"]: c for c in build_cases()}
+        for step in CHAIN:
+            for cat, content, _refs in step["establishes"]:
+                ctx_blob = " ".join(cases[step["id"]]["contexts"][a] for a in ARMS)
+                # The distinctive phrase this task establishes must not be visible
+                # to itself (it is added to the store only AFTER the task runs).
+                assert content not in ctx_blob, f"{step['id']} leaked its own answer"
+
+    def test_rainman_context_is_tighter_than_grep(self):
+        """Even when both surface the earned fact, Rainman's relevance floor
+        injects fewer items than a top-k grep that pads with weak matches."""
+        from eval.local_demo.sequential_memory_bench import context_stats
+        stats = context_stats()
+        assert stats["rainman"]["avg_items"] <= stats["file"]["avg_items"]
