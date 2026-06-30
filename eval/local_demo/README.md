@@ -185,13 +185,41 @@ term-sharing distractors, scale/token-cost — are the separate
 `file_memory_vs_rainman.py` story, not this chain. We report the tie rather than
 engineer it away.
 
-**Why it still matters / next step.** The binary mock can't see whether a noisier
-5-note context *misleads* a real agent into using the wrong fact, or whether
-ranking the right card first changes the answer. That needs a real agent: run
-`--contexts`, drive fresh subagents on `prompt` vs `prompt + each arm's context`,
-record `{task_id: {none, file, rainman}}`, and `--grade` it (deterministic
-token-presence). That live run is the only thing that produces a real
-task-success number — this file ships none.
+### Live result (captured 2026-06-30, 12 fresh Claude subagents)
+
+We ran it for real — `--contexts`, then 12 fresh subagents (no tools, no repo
+access) on t2–t5 × 3 arms, graded by `--grade sequential_sample_run.json`:
+
+```
+task  requires            no-mem  file-mem  Rainman
+t2    verify_quill_sig      fail      PASS     PASS
+t3    180                   PASS      PASS     PASS   <- agent guessed it
+t4    account_id            PASS      PASS     PASS   <- agent guessed it
+t5    verify_quill_sig,180  fail      PASS     PASS
+
+resolved:  no-memory 3/5   file-memory 5/5   Rainman 5/5
+Rainman lift:  +40.0pp vs no-memory   +0.0pp vs file-memory
+```
+
+**The interesting part: the live run REVISED THE MOCK DOWN.** The mock assumed a
+memoryless agent fails every dependent task (1/5). It doesn't — a strong model
+**self-rescued** on t3 and t4: it guessed the *standard* defaults (180-day refund
+window is a real card-network default; "order locks by `account_id`" is the
+textbook deadlock fix). Memory only moved the needle where the fact was
+**genuinely unguessable** — `verify_quill_sig`, an invented function name no model
+can know (t2, t5). So the honest, narrower claim is: **memory's lift concentrates
+on project-specific, unguessable knowledge — not on things a capable model
+already knows.** That is exactly what a project-memory tool should be credited
+for, and nothing more.
+
+file-memory still ties Rainman here (both surfaced the fact; the agent could find
+it in either context). The context-precision gap (2.8 vs 4.6 items) didn't
+convert to a task-success gap at this scale — an honest null on that axis. Where
+Rainman pulls ahead on *retrieval* is the `file_memory_vs_rainman.py` stress
+cases (morphology, ranking-under-noise, scale), which this guessable-default
+chain doesn't exercise.
+
+To reproduce the grade with no LLM: `python eval/local_demo/sequential_memory_bench.py --grade`.
 
 ## Honest caveats — what this does NOT show
 
