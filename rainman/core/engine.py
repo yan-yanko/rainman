@@ -505,7 +505,15 @@ class RainmanEngine:
             initial.append((entry, scores))
 
         initial.sort(key=lambda x: x[1]["total"], reverse=True)
-        top_ids = [e.id for e, _ in initial[:limit]]
+        # Spreading-activation anchors must be RELEVANT themselves, not just the
+        # highest-scoring leftovers. On an off-domain query every keyword score
+        # is 0, so the phase-1 "top" is whatever ranks on recency/importance —
+        # pure noise. Letting that seed associative boost gives its graph
+        # neighbours a non-zero associative score, which then sails past the
+        # relevance floor (confident noise — exactly what the floor exists to
+        # stop). Require a real keyword signal to anchor; a genuinely relevant
+        # anchor still spreads to its links (the M3/M4 feature is preserved).
+        top_ids = [e.id for e, s in initial[:limit] if s["keyword"] > 0.0]
 
         # Phase 2: Re-score with associative boost (2-hop spreading activation)
         reverse_index = build_reverse_link_index(entries)

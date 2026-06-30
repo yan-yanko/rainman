@@ -121,6 +121,23 @@ class TestRetrievalQuality:
         assert "dbpool" in labels
         assert results[0].memory.id != "" and labels[0] == "dbpool"
 
+    def test_relevance_floor_holds_after_rehearsal(self, loaded_engine):
+        """Regression (found by eval/local_demo/file_memory_vs_rainman.py): the
+        floor must hold even after other recalls have rehearsed some memories.
+        Prior recalls change which memories rank highest in phase 1; if those
+        recency-ranked-but-irrelevant memories are allowed to anchor spreading
+        activation, their graph neighbours get a non-zero associative score and
+        leak past the floor on a genuinely off-domain query. Anchors must be
+        keyword-relevant themselves."""
+        engine, _ = loaded_engine
+        # Rehearse a spread of memories (as a real session would).
+        for q in ("authenticating users", "session caching", "rate limiting bugs",
+                  "n+1 queries in the orm", "exponential backoff webhooks"):
+            engine.recall(q, limit=5)
+        # Now a query unrelated to anything stored must STILL return nothing.
+        assert engine.recall("quantum blockchain tulip mania horoscope") == []
+        assert engine.recall("what is the capital of France") == []
+
     def test_morphology_match_is_nonzero(self):
         """Direct guard on the core win: a query morphologically related to the
         stored content scores > 0. The old exact-token scorer returned 0.0."""

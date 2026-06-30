@@ -90,6 +90,62 @@ cards than the webhook card, so even semantic recall@3 misses it. Left in on
 purpose — semantic retrieval is a real improvement, not magic. Requires the
 extra (`pip install 'rainman[semantic]'`); without it the script says so.
 
+## Companion: `file_memory_vs_rainman.py` — Rainman vs file-memory (the value-test)
+
+The skeptic's question: *does Rainman's retrieval engine actually beat "just keep
+notes in markdown and grep them" — the thing I already do?* This measures it
+**deterministically, no LLM**, holding the corpus constant and varying only the
+retrieval:
+
+- **file-memory baseline** — a *fair* model of ctrl-F over notes: whole-word
+  bag-of-words term match, **stopword-filtered** (so it searches distinctive
+  terms like a human would), ranked by match count then recency. No stemming,
+  no IDF. This isolates exactly Rainman's two extra mechanisms.
+- **Rainman** — `engine.recall()`: stemmed, IDF-weighted, importance/decay/
+  associative ranking, top-k.
+
+Both retrieve from one store: 6 answer-bearing cards + a pile of distractors
+(some sharing query words on purpose). Queries are `direct` / `morphology` /
+`ranking` / `control` (answer in no card). Scored with the repo's own IR metrics.
+
+Result (`python eval/local_demo/file_memory_vs_rainman.py`):
+
+```
+query                          class        file-memory   Rainman
+authenticating users           morphology          miss       hit   (stemming)
+why are sessions slow to load  ranking             miss       hit   (IDF out-ranks a
+token expiry in the auth ...   ranking             miss       hit    term-sharing distractor)
+... (direct queries: both hit; controls: both correctly surface nothing)
+
+aggregate over 8 answerable queries   recall@5  0.62 -> 1.00   MRR 0.56 -> 0.92   nDCG@5 0.58 -> 0.94
+token cost to reach the answer:  file-memory ~458 tok (whole store)  vs  Rainman ~88 tok (top-5)
+```
+
+file-memory ties on direct-word queries and wins nothing; Rainman adds the
+morphology and rank-under-noise cases grep structurally can't do. The token gap
+widens with the store: `--distractors 200` → **42x** less context to surface the
+same answer (grep has no ranker, so its reliable mode is "hold everything").
+
+### A bug this test found (and we fixed)
+
+Building this surfaced a real relevance-floor leak. After prior recalls rehearsed
+some memories, an **off-domain** control query (`"capital of France"`) surfaced
+cards with `keyword=0` but `associative=0.15`. Cause: phase-1 spreading-activation
+*anchors* were the top-k by score even when every keyword score was 0 — so pure
+recency noise seeded associative boost to its graph neighbours, which then sailed
+past the floor. Fix: anchors must be keyword-relevant themselves
+(`engine.py`, guarded by `test_relevance_floor_holds_after_rehearsal`). That is
+the point of a value-test — it pays for itself by catching this.
+
+### Honest caveats (this companion)
+
+- **Mechanical retrieval only.** It does **not** model an LLM reading a small
+  curated `MEMORY.md` and reasoning over it — an LLM is a strong fuzzy matcher,
+  so on a *small* store file-memory + a smart reader is competitive. Rainman's
+  edge is upstream: **zero tokens** to store/rank, and selection that still works
+  when the store is far too big to dump into context (the token-cost column).
+- **Synthetic, small-N**, and the corpus/queries are hand-built. Not SWE-bench.
+
 ## Honest caveats — what this does NOT show
 
 - **N = 6, synthetic.** The facts were *designed* to be unguessable, so the
