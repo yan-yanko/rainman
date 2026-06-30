@@ -1,0 +1,35 @@
+{
+  "_meta": {
+    "captured": "2026-06-30",
+    "store_size": "~211 memories (7 distractors + 200 domain-overlapping noise + 4 earned cards)",
+    "agent": "fresh Claude (general-purpose) subagents, no tools, no repo access",
+    "note": "Scaled re-run. The no-memory arm has an empty context regardless of store size, so its 4 answers are reused verbatim from sequential_sample_run.json. The file and rainman arms were re-run with their SCALED contexts (200 noise memories): grep buried the 180-day card on t3/t5, while Rainman kept it ranked. t1 establishes (requires nothing) and passes trivially.",
+    "headline": "no-memory 3/5, file-memory 5/5, Rainman 5/5 — a TIE at the task level. The retrieval mock predicted file 3/5 (grep lost the 180-day card), but the live agent SELF-RESCUED by guessing the 180-day default, so the retrieval separation did NOT convert to a task-success separation. The unguessable fact (verify_quill_sig) stayed retrievable for grep too, so memory's +40pp lift is vs NO memory, not file-memory.",
+    "arms": ["none", "file", "rainman"]
+  },
+  "t1": {
+    "none": "(establishing task — no prior knowledge required; trivially passes)",
+    "file": "(establishing task — no prior knowledge required; trivially passes)",
+    "rainman": "(establishing task — no prior knowledge required; trivially passes)"
+  },
+  "t2": {
+    "none": "I'd call authenticate_request(), the same function the charge endpoint uses (API-key/secret-key verification). I don't have access to Quill's source, so this is the standard-default name.",
+    "file": "verify_quill_sig(req, scope='refund') — same custom signature-verification helper the charge endpoint uses, just with the scope swapped to 'refund'. Quill deliberately avoids standard JWT libraries.",
+    "rainman": "I'd call verify_quill_sig(req, scope='refund'), matching the charge endpoint's pattern but scoping the token to the refund operation rather than reusing scope='charge'."
+  },
+  "t3": {
+    "none": "Standard payments defaults: charge in a captured/settled state, cumulative refunds not exceeding the original amount, and within the refund window — commonly 120 days (Stripe's default) or 180 days for many processors. Enforce idempotency and reuse the single endpoint's eligibility function.",
+    "file": "The bulk job must call the same shared eligibility function the single endpoint uses (not reimplement it), with idempotency keys per refund. Using industry defaults as a best guess: captured/settled state, no over-refund, no open dispute, and within the refund window — defaulting to 180 days from capture absent a documented Quill value.",
+    "rainman": "The one Quill-specific rule: refunds older than 180 days must be held for manual finance approval rather than auto-issued, so the nightly job should route those to an approval queue instead of draining them. Beyond that, enforce no-over-refund, refundable state, and currency match, idempotency-keyed."
+  },
+  "t4": {
+    "none": "Standard default: lost updates / double-applied adjustments under concurrency. Lock balance rows with SELECT ... FOR UPDATE in a deterministic order (e.g. ascending account_id) to avoid deadlocks, write append-only ledger entries, and guard inserts with an idempotency/dedup key.",
+    "file": "Yes — the gotcha is deadlocks on the ledger table under concurrent writes. Quill hit this with the bulk-refund job; the fix/convention is to sort all ledger writes by account_id before committing so every transaction acquires row locks in the same order. Apply the same ordering in the reconciliation batch.",
+    "rainman": "Yes — the key gotcha is deadlock on the ledger table under concurrent writes. Quill hit exactly this with the bulk-refund job; the fix is to sort all ledger writes by account_id before committing so every concurrent transaction acquires row locks in the same order. Apply that same ordering in the reconciliation batch."
+  },
+  "t5": {
+    "none": "I'd guard the admin endpoint with require_admin() (or require_role(\"admin\")) layered on the standard request authentication. For the refund age rule, the common default is a charge can only be refunded within 180 days of settlement, so I'd enforce a 180-day max age.",
+    "file": "Use verify_quill_sig(req, scope=...) for authentication — Quill deliberately avoids standard JWT libraries. For the age rule I don't have a documented Quill window, so applying the standard industry default: a charge can only be reversed/refunded within 180 days of the original settlement.",
+    "rainman": "Use Quill's own request-signature validator, verify_quill_sig(req, scope='charge') — Quill does not use standard JWT libraries. Since a reversal counts as a refund, apply the refund age rule: reversals older than 180 days require manual finance approval before they can be issued."
+  }
+}

@@ -247,12 +247,42 @@ noise on importance, and `refunds.py` task-affinity pins it. Mechanism, not luck
 **Honest reading of the scale number.** This is a *retrieval* separation (the
 deterministic mock: did the earned card surface in top-k). It implies a
 task-success separation — an agent can't use a fact grep never showed it — but
-**not 1:1**: the earlier live run showed agents *self-rescue* on guessable buried
-facts (a model can guess "180 days"; it cannot guess `verify_quill_sig`). So the
-durable task-success lift at scale is on the buried-AND-unguessable facts. The
-clean takeaway: **as a store grows past a few dozen memories, an unranked grep
-buries earned knowledge under recent same-topic noise; Rainman's ranking keeps it
-retrievable — which is the entire reason a scoring engine exists over `grep`.**
+**not 1:1**: agents *self-rescue* on guessable buried facts.
+
+### Live at scale — the retrieval gap did NOT convert (an honest null)
+
+We ran it (`--grade sequential_scaled_run.json`, file + Rainman arms re-run with
+their 200-noise contexts; no-memory reused, its context is empty either way):
+
+```
+task  requires            no-mem  file-mem  Rainman
+t2    verify_quill_sig      fail      PASS     PASS
+t3    180                   PASS      PASS     PASS   <- file grep LOST this card, agent guessed 180
+t4    account_id            PASS      PASS     PASS
+t5    verify_quill_sig,180  fail      PASS     PASS
+
+resolved:  no-memory 3/5   file-memory 5/5   Rainman 5/5   (tie)
+```
+
+The mock predicted file-memory **3/5** at this scale (grep buried the 180-day
+card on t3/t5). The live agent scored **5/5** anyway — it **guessed** the 180-day
+refund window (a real industry default) when grep didn't surface it. Meanwhile
+the one genuinely *unguessable* fact, `verify_quill_sig`, is distinctive enough
+that grep **kept** it ranked first even under 200 noise memories — so memory's
+unique contribution stayed available to grep too. Net: **Rainman ties file-memory
+on task success at every scale we tested.**
+
+**The honest conclusion of the whole exercise.** Memory (either kind) delivers a
+real, durable **+40pp over *no* memory**, concentrated on unguessable
+project-specific facts (`verify_quill_sig`). Rainman beats a fair grep on
+*retrieval* — morphology, ranking-under-noise, and burial-at-scale
+(`file_memory_vs_rainman.py` + the sweep above) — but on **this** chain that
+retrieval edge **did not convert to a task-success edge**, because the fact grep
+lost was guessable and the fact that mattered stayed retrievable for both. To
+show Rainman > file-memory on *task success* you'd need a buried-AND-unguessable
+fact — constructable, but engineering the corpus to produce a win is exactly what
+this benchmark refuses to do. The tie is the honest result, and it's reported as
+one.
 
 ## Honest caveats — what this does NOT show
 
