@@ -165,6 +165,39 @@ def _grep_context(notes, query: str, k: int) -> str:
     return "Relevant project notes:\n" + "\n".join(f"- {c}" for c in top)
 
 
+# Realistic store noise: payment-domain memories that SHARE vocabulary with the
+# tasks (refund/charge/auth/token/ledger/request/webhook) so they crowd a grep,
+# but NEVER contain an answer token (verify_quill_sig / 180 / account_id). This
+# is what a real .rainman store looks like after months — not zero-overlap junk.
+_NOISE_TEMPLATES = [
+    ("note",       "The {dom} dashboard for {reg} refreshes every {n} minutes", ["dashboards/{dom}.md"]),
+    ("note",       "{Dom} request latency p99 settled around {n}ms after the cache change", ["src/{dom}/metrics.py"]),
+    ("decision",   "Deprecated the legacy {dom} export endpoint in favour of {dom}_v2", ["src/{dom}/api.py"]),
+    ("convention", "All {dom} webhooks retry on the standard schedule with jitter", ["src/{dom}/hooks.py"]),
+    ("failure",    "A {dom} report job timed out under load; raised the worker pool to {n}", ["src/jobs/{dom}.py"]),
+    ("note",       "{Dom} auth tokens are cached for {n} seconds at the edge layer", ["src/{dom}/cache.py"]),
+    ("note",       "The {dom} settlement file lands in the {reg} bucket nightly", ["ops/{dom}.txt"]),
+    ("note",       "{Dom} requests are rate-limited to {n} per minute at the gateway", ["src/{dom}/gw.py"]),
+]
+_DOMAINS = ["refund", "charge", "payout", "ledger", "billing", "invoice", "settlement", "webhook"]
+_REGIONS = ["eu-central-1", "us-east-1", "ap-south-1"]
+_NUMS = [30, 45, 90, 250, 500, 15, 60, 120]  # deliberately excludes 180 (an answer token)
+
+
+def _noise(n: int):
+    """Generate `n` realistic, domain-overlapping noise memories (no answer tokens)."""
+    out = []
+    i = 0
+    while len(out) < n:
+        cat, tmpl, refs = _NOISE_TEMPLATES[i % len(_NOISE_TEMPLATES)]
+        dom = _DOMAINS[i % len(_DOMAINS)]
+        content = tmpl.format(dom=dom, Dom=dom.capitalize(),
+                              reg=_REGIONS[i % len(_REGIONS)], n=_NUMS[i % len(_NUMS)])
+        out.append((cat, f"{content} [{i}]", [r.format(dom=dom) for r in refs]))
+        i += 1
+    return out
+
+
 def _seed():
     """A real engine + a parallel notes list, both holding the distractors."""
     tmp = tempfile.mkdtemp(prefix="seq_bench_")
@@ -178,12 +211,24 @@ def _seed():
     return engine, notes
 
 
-def build_cases(k: int = 5):
+def build_cases(k: int = 5, n_noise: int = 0):
     """Replay the chain in order; capture all three arms' injected context for
-    each task BEFORE advancing the store with that task's earned knowledge."""
+    each task BEFORE advancing the store with that task's earned knowledge.
+
+    `n_noise` total noise memories are split into batches injected BEFORE each
+    task — simulating unrelated work piling up between sessions, so knowledge
+    earned early (e.g. t2's auth convention) is buried under more-recent noise by
+    the time a later task (t5) needs it. That ageing is where a grep's recency
+    tiebreak stops saving it; Rainman must rank on relevance instead."""
     engine, notes = _seed()
+    batch = n_noise // len(CHAIN)
+    noise = _noise(n_noise)
     cases = []
-    for step in CHAIN:
+    for i, step in enumerate(CHAIN):
+        # Intervening activity since the previous task (recent, domain-overlapping).
+        for cat, content, refs in noise[i * batch:(i + 1) * batch]:
+            engine.add(content, category=cat, file_refs=refs)
+            notes.append((content, refs))
         atask = AgentTask(id=step["id"], prompt=step["prompt"],
                           files=step["files"], error=step["error"])
         cases.append({
@@ -247,8 +292,8 @@ def score(run: dict) -> dict:
 
 
 # --- mock agent (dry-run): resolves iff the earned token is in the context ---
-def _mock_run():
-    cases = build_cases()
+def _mock_run(n_noise: int = 0):
+    cases = build_cases(n_noise=n_noise)
     run = {}
     for c in cases:
         run[c["id"]] = {a: c["contexts"][a] for a in ARMS}  # answer == the context it saw
@@ -259,12 +304,12 @@ def _approx_tokens(text: str) -> int:
     return max(0, len(text) // 4)  # ~4 chars/token; a label, not a real tokenizer
 
 
-def context_stats():
+def context_stats(n_noise: int = 0):
     """Precision of the injected context, which the binary did-it-surface check
     hides: how many items / tokens each arm injects per task. A relevance floor
     (Rainman) prunes to the few that matter; a top-k grep pads to k with weak
     matches, so a real agent must read more noise to find the same fact."""
-    cases = build_cases()
+    cases = build_cases(n_noise=n_noise)
     items = {a: [] for a in ARMS}
     tokens = {a: [] for a in ARMS}
     for c in cases:
@@ -296,26 +341,42 @@ def _print_score(result, header):
           f"+{result['lift_vs_file_pp']}pp vs file-memory")
 
 
-def _cmd_dry_run():
-    result = score(_mock_run())
-    _print_score(result, "[MOCK] retrieval-plumbing check — resolves iff the earned token "
-                         "is in the injected context. NOT a task-success result.\n")
-    stats = context_stats()
+def _cmd_dry_run(n_noise=0):
+    result = score(_mock_run(n_noise))
+    _print_score(result, f"[MOCK] retrieval-plumbing check (+{n_noise} noise memories) — "
+                         "resolves iff the earned token is in the injected context.\n")
+    stats = context_stats(n_noise)
     print("\ncontext precision (avg per task — fewer = tighter, less noise to read):")
     for a in ARMS:
         print(f"  {a:9} {stats[a]['avg_items']:>4} items   ~{stats[a]['avg_tokens']:>4} tokens")
-    print("\nHonest read: at this small, vocabulary-overlapping scale, file-memory and")
-    print("Rainman both SURFACE the earned knowledge (binary tie) — the chain's real")
-    print("result is +Npp vs NO memory (a memoryless agent re-derives wrong defaults).")
-    print("Rainman's edge here is a tighter context; its retrieval-MISS wins (morphology,")
-    print("ranking under term-sharing noise, scale) are in file_memory_vs_rainman.py.")
-    print("Whether a noisier context misleads a REAL agent is the live run (--contexts).")
     return 0
 
 
-def _cmd_contexts():
+def _cmd_scale(levels=(0, 50, 200, 500)):
+    """Sweep store size. As noise piles up between tasks, the earned card ages;
+    a grep's recency tiebreak stops saving it while Rainman ranks on relevance.
+    Pure RETRIEVAL (mock) — does the right earned memory still surface?"""
+    print("RETRIEVAL at scale — earned-knowledge tasks resolved (t2-t5, of 4), no LLM:\n")
+    print(f"{'store size':>12} {'no-mem':>8} {'file-mem':>9} {'Rainman':>8}   "
+          f"{'file items':>10} {'rain items':>10}")
+    print("-" * 74)
+    n_dep = sum(1 for s in CHAIN if s["requires"])
+    for lvl in levels:
+        r = score(_mock_run(lvl))
+        st = context_stats(lvl)
+        size = len(DISTRACTORS) + lvl + sum(len(s["establishes"]) for s in CHAIN)
+        # count only the dependent (t2-t5) resolutions, not the freebie t1
+        dep = {a: sum(1 for row in r["per_task"] if row["requires"] and row[a]) for a in ARMS}
+        print(f"{size:>12} {dep['none']:>6}/{n_dep} {dep['file']:>7}/{n_dep} "
+              f"{dep['rainman']:>6}/{n_dep}   {st['file']['avg_items']:>10} "
+              f"{st['rainman']['avg_items']:>10}")
+    print("\n(Deterministic retrieval, no LLM. 'store size' = distractors + noise + earned cards.)")
+    return 0
+
+
+def _cmd_contexts(n_noise=0):
     print("Per-task injected context by arm (live retrieval, no LLM):\n")
-    for c in build_cases():
+    for c in build_cases(n_noise=n_noise):
         print(f"### {c['id']}  (needs: {c['requires'] or '— establishing —'})")
         print(f"    prompt: {c['prompt']}")
         for a in ARMS:
@@ -339,16 +400,20 @@ def main(argv=None):
 
     p = argparse.ArgumentParser(description="Sequential same-repo memory benchmark")
     p.add_argument("--dry-run", action="store_true", help="Mock-agent plumbing check (no LLM).")
+    p.add_argument("--scale", action="store_true", help="Sweep store size 0..500 (retrieval, no LLM).")
+    p.add_argument("--distractors", type=int, default=0, help="Noise memories to inject (default 0).")
     p.add_argument("--contexts", action="store_true", help="Print each arm's per-task context.")
     p.add_argument("--grade", nargs="?", const=SAMPLE_RUN, default=None,
                    help="Grade a recorded 3-arm run JSON.")
     a = p.parse_args(argv)
 
+    if a.scale:
+        return _cmd_scale()
     if a.contexts:
-        return _cmd_contexts()
+        return _cmd_contexts(a.distractors)
     if a.grade is not None:
         return _cmd_grade(a.grade)
-    return _cmd_dry_run()
+    return _cmd_dry_run(a.distractors)
 
 
 if __name__ == "__main__":

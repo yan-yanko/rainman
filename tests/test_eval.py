@@ -164,3 +164,19 @@ class TestSequentialBench:
         from eval.local_demo.sequential_memory_bench import context_stats
         stats = context_stats()
         assert stats["rainman"]["avg_items"] <= stats["file"]["avg_items"]
+
+    def test_rainman_holds_at_scale_where_grep_degrades(self):
+        """The scale separation: at a tiny store, file-memory grep ties Rainman
+        (both surface the earned card). As realistic domain-overlapping noise
+        piles up between tasks, the earned card ages out of grep's top-k (its
+        match-count+recency ranking can't recover it), while Rainman keeps it via
+        IDF + importance + task-affinity. If this stops holding, the scale claim
+        in the README is wrong."""
+        from eval.local_demo.sequential_memory_bench import _mock_run, score
+        small = score(_mock_run(0))
+        scaled = score(_mock_run(50))
+        # Tiny store: grep ties Rainman.
+        assert small["resolved"]["file"] == small["resolved"]["rainman"]
+        # At scale: Rainman holds the whole chain; grep falls behind it.
+        assert scaled["resolved"]["rainman"] == small["n"]
+        assert scaled["resolved"]["rainman"] > scaled["resolved"]["file"]

@@ -221,6 +221,39 @@ chain doesn't exercise.
 
 To reproduce the grade with no LLM: `python eval/local_demo/sequential_memory_bench.py --grade`.
 
+### At scale — where file-memory and Rainman finally separate
+
+The tie above is a *small-store* artifact. Inject realistic domain-overlapping
+noise (payment-domain memories sharing `refund`/`auth`/`ledger`/`charge`
+vocabulary but never an answer token), split into batches *between* tasks so
+early-earned knowledge ages under later activity, and sweep the store size
+(`python eval/local_demo/sequential_memory_bench.py --scale`, deterministic, no LLM):
+
+```
+  store size   no-mem  file-mem  Rainman   file items rain items   (earned-knowledge tasks t2-t5)
+          10      0/4       4/4      4/4          4.6        2.8
+          60      0/4       2/4      4/4          5.0        5.0
+         210      0/4       2/4      4/4          5.0        5.0
+         510      0/4       2/4      4/4          5.0        5.0
+```
+
+At ~60+ memories **file-memory drops to 2/4 while Rainman holds 4/4**. Per-task
+(`--dry-run --distractors 200`), grep loses the **"refunds over 180 days need
+manual approval"** card on t3 and t5: recent refund-domain noise out-ranks it on
+grep's match-count+recency, and it falls out of the top-5. Rainman keeps it —
+IDF down-weights the common `refund` term, the `convention` outranks `note`
+noise on importance, and `refunds.py` task-affinity pins it. Mechanism, not luck.
+
+**Honest reading of the scale number.** This is a *retrieval* separation (the
+deterministic mock: did the earned card surface in top-k). It implies a
+task-success separation — an agent can't use a fact grep never showed it — but
+**not 1:1**: the earlier live run showed agents *self-rescue* on guessable buried
+facts (a model can guess "180 days"; it cannot guess `verify_quill_sig`). So the
+durable task-success lift at scale is on the buried-AND-unguessable facts. The
+clean takeaway: **as a store grows past a few dozen memories, an unranked grep
+buries earned knowledge under recent same-topic noise; Rainman's ranking keeps it
+retrievable — which is the entire reason a scoring engine exists over `grep`.**
+
 ## Honest caveats — what this does NOT show
 
 - **N = 6, synthetic.** The facts were *designed* to be unguessable, so the
