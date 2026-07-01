@@ -9,14 +9,8 @@ build/
 .pytest_cache/
 *.tmp
 
-# Rainman: the project layer is the documented "git-committable" memory, so
-# .rainman/memories.json, config.json and sync_state.json stay TRACKABLE
-# (commit them to share project memory, or sync via `rainman sync`).
-# Only volatile/local/secret files under it are ignored:
-.rainman/*.lock
-.rainman/*.tmp
-.rainman/memories.db
-.rainman/memories.db-wal
-.rainman/memories.db-shm
-.rainman/sync_credentials.json
-.rainman/audit*.jsonl
+# Rainman's OWN dogfood memory stays out of this PUBLIC repo — it holds local
+# absolute paths and dev-chatter, not something to publish. (The "git-committable
+# project layer" is a feature for users' PRIVATE/team repos, not a mandate to
+# commit this repo's own store.) Private marketing/ops live in rainman-private.
+.rainman/
