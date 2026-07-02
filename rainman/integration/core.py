@@ -395,3 +395,68 @@ def capture_learnings(engine, assistant_text: str, cwd=None,
         engine.add(content=content, category=category, source=source, layer="project")
         stored += 1
     return stored
+
+
+# --- learn from a git commit (host-independent — works in ANY editor) --------
+# Trivial commits that carry no reusable knowledge.
+_TRIVIAL_COMMIT_PREFIXES = (
+    "wip", "merge ", "merge branch", "merge pull", "bump", "typo", "fixup!",
+    "squash!", "revert \"merge", "chore(release)", "release ",
+)
+
+
+def _commit_category(message_lower: str) -> str:
+    if any(k in message_lower for k in ("revert", "broke", "regress", "hotfix")):
+        return "failure"
+    if any(k in message_lower for k in ("fix", "resolve", "patch", "bugfix")):
+        return "solution"
+    if any(k in message_lower for k in ("refactor", "redesign", "switch to",
+                                        "migrate", "decision", "adopt")):
+        return "decision"
+    return "note"
+
+
+def learn_from_commit(engine, message: str, changed_files, cwd=None,
+                      source: str = "hook:git:post-commit"):
+    """Store one git commit as project memory — the host-independent auto-learn
+    path (a post-commit hook runs this regardless of which editor made the
+    commit). Salience-gated, secret-redacted, dedup-refreshing. Returns the
+    stored Memory or None. No-op on trivial commits or when auto-learn is off."""
+    if engine.policy.get("disable_auto_learn"):
+        return None
+    msg = (message or "").strip()
+    if len(msg) < 15:
+        return None
+    low = msg.lower()
+    if any(low.startswith(p) for p in _TRIVIAL_COMMIT_PREFIXES):
+        return None
+
+    from rainman.core.redact import safe_content
+    from rainman.core.salience import is_salient, salience_score
+
+    category = _commit_category(low)
+    content = f"Commit: {msg[:300]}"
+    file_refs = [_project_relative(f, cwd) for f in (changed_files or []) if f]
+
+    if not is_salient(category, content, file_refs):
+        return None
+
+    safe = safe_content(
+        content,
+        extra_patterns=engine.policy.get("extra_redaction_patterns"),
+        extra_path_denylist=engine.policy.get("path_denylist"),
+    )
+    if safe is None:
+        return None
+    content = safe
+
+    existing = engine.recall(content, limit=1)
+    if existing and existing[0].total_score > DEDUP_SCORE_THRESHOLD:
+        engine.refresh(existing[0].memory.id)
+        return None
+
+    return engine.add(
+        content=content, category=category, file_refs=file_refs,
+        source=source, layer="project",
+        metadata={"salience": round(salience_score(category, content, file_refs), 2)},
+    )

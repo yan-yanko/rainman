@@ -83,3 +83,41 @@ class TestIntegrationCore:
                              {"file_path": os.path.join(project, "a.py"),
                               "old_string": "x", "new_string": "y"}, "ok", project)
         assert e.store.load_all() == []
+
+
+@pytest.mark.unit
+class TestLearnFromCommit:
+    """The host-independent git auto-learn path (a post-commit hook calls this)."""
+
+    def test_fix_commit_becomes_solution(self, engine):
+        e, project = engine
+        m = core.learn_from_commit(
+            e, "Fix auth: JWT tokens expired early; switched to refresh-then-compare",
+            ["src/auth.py"], cwd=project)
+        assert m is not None
+        assert m.category == "solution"           # "fix" -> solution
+        assert m.source == "hook:git:post-commit"
+        assert "Commit:" in m.content
+
+    def test_trivial_commits_are_skipped(self, engine):
+        e, _ = engine
+        assert core.learn_from_commit(e, "wip", []) is None          # too short + prefix
+        assert core.learn_from_commit(e, "Merge branch 'main'", []) is None
+        assert core.learn_from_commit(e, "typo", []) is None
+        assert e.store.load_all() == []
+
+    def test_dedup_refreshes_not_duplicates(self, engine):
+        e, project = engine
+        msg = "Fix billing deadlock: order ledger writes by account_id to avoid the lock cycle"
+        first = core.learn_from_commit(e, msg, ["src/billing.py"], cwd=project)
+        assert first is not None
+        second = core.learn_from_commit(e, msg, ["src/billing.py"], cwd=project)
+        assert second is None                      # deduped
+        assert len(e.store.load_all()) == 1
+
+    def test_respects_disable_policy(self, engine, monkeypatch):
+        e, _ = engine
+        monkeypatch.setattr(e.policy, "get",
+                            lambda k, d=None: True if k == "disable_auto_learn" else d)
+        assert core.learn_from_commit(e, "Fix a real and important bug here", []) is None
+        assert e.store.load_all() == []

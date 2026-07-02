@@ -92,11 +92,16 @@ def main():
     # setup
     p_setup = sub.add_parser("setup", help="One-command setup: init + MCP + hooks")
     p_setup.add_argument("--host", help="Target host (claude, cursor, vscode, "
-                         "windsurf, cline, zed, continue). Default: claude (full hooks).")
+                         "windsurf, cline, zed, continue, git). Default: claude "
+                         "(full hooks). `--host git` installs the post-commit auto-learn hook.")
 
     # mcp-config
     p_mcp = sub.add_parser("mcp-config", help="Print the MCP config snippet for a host")
     p_mcp.add_argument("--host", help="Host name (omit to list supported hosts)")
+
+    # learn-commit
+    sub.add_parser("learn-commit", help="Store the latest git commit as memory "
+                   "(host-independent auto-learn; runs from a post-commit hook)")
 
     # doctor
     sub.add_parser("doctor", help="Self-test: verify engine, storage, and integrations")
@@ -115,7 +120,7 @@ def main():
         cmd_init, cmd_add, cmd_recall, cmd_status,
         cmd_links, cmd_export, cmd_context, cmd_ingest,
         cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
-        cmd_remote, cmd_sync, cmd_mcp_config,
+        cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit,
     )
 
     if args.command == "init":
@@ -152,6 +157,8 @@ def main():
         cmd_setup(host=args.host)
     elif args.command == "mcp-config":
         cmd_mcp_config(host=args.host)
+    elif args.command == "learn-commit":
+        cmd_learn_commit()
     elif args.command == "doctor":
         cmd_doctor()
     elif args.command == "serve":

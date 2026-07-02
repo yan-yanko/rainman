@@ -389,7 +389,87 @@ def _setup_other_host(host) -> None:
     print(f"\n   Note: {spec['note']}")
 
     print("\nRainman tools (recall/remember/context/links/status) are now available "
-          "in this host\n(the model calls them when relevant).")
+          "in this host\n(the model calls them when relevant). For auto-learn that "
+          "works in ANY editor,\nalso run:  rainman setup --host git")
+
+
+def cmd_learn_commit() -> None:
+    """Store the most recent git commit as project memory — the host-independent
+    auto-learn path. Run from a post-commit hook or manually. Silent unless it
+    stores something."""
+    import subprocess
+
+    project_dir = os.getcwd()
+    try:
+        subj = subprocess.run(
+            ["git", "log", "-1", "--format=%h%n%s%n%n%b"],
+            capture_output=True, text=True, cwd=project_dir, timeout=10)
+        names = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            capture_output=True, text=True, cwd=project_dir, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+    if subj.returncode != 0 or not subj.stdout.strip():
+        return  # not a git repo, or no commits yet
+
+    lines = subj.stdout.splitlines()
+    short_hash = lines[0].strip() if lines else ""
+    message = "\n".join(lines[1:]).strip()
+    changed = [f for f in names.stdout.splitlines() if f.strip()]
+
+    from rainman.core.engine import RainmanEngine
+    from rainman.integration import core
+
+    engine = RainmanEngine(project_dir=project_dir)
+    stored = core.learn_from_commit(engine, message, changed, cwd=project_dir)
+    if stored is not None:
+        print(f"[rainman] captured commit {short_hash}")
+
+
+def _install_git_hook() -> None:
+    """Install a post-commit hook that runs `rainman learn-commit` — auto-learn
+    that works no matter which editor made the commit."""
+    import subprocess
+
+    project_dir = os.getcwd()
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-dir"],
+                           capture_output=True, text=True, cwd=project_dir, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        r = None
+    if r is None or r.returncode != 0:
+        print("Not a git repository. Run this inside a repo (or `git init` first).")
+        return
+
+    git_dir = r.stdout.strip()
+    if not os.path.isabs(git_dir):
+        git_dir = os.path.join(project_dir, git_dir)
+    hooks_dir = os.path.join(git_dir, "hooks")
+    os.makedirs(hooks_dir, exist_ok=True)
+    hook_path = os.path.join(hooks_dir, "post-commit")
+
+    # Redirect to /dev/null so the hook never noises up `git commit` output.
+    invocation = "python -m rainman learn-commit >/dev/null 2>&1 || true"
+    marker = "rainman learn-commit"
+
+    if os.path.exists(hook_path):
+        with open(hook_path, encoding="utf-8") as f:
+            existing = f.read()
+        if marker in existing:
+            print(f"Skipped: rainman already in {hook_path}")
+            return
+        with open(hook_path, "a", encoding="utf-8") as f:
+            f.write(f"\n# Rainman: host-independent auto-learn\n{invocation}\n")
+        print(f"Done: appended to existing {hook_path}")
+    else:
+        with open(hook_path, "w", encoding="utf-8") as f:
+            f.write(f"#!/bin/sh\n# Rainman: host-independent auto-learn\n{invocation}\n")
+        print(f"Done: {hook_path}")
+    try:
+        os.chmod(hook_path, 0o755)
+    except OSError:
+        pass
+    print("Rainman will now capture each commit as project memory — in ANY editor.")
 
 
 def cmd_setup(host=None) -> None:
@@ -398,6 +478,9 @@ def cmd_setup(host=None) -> None:
     ``--host claude`` (default) does the full Claude Code flow (MCP + hooks).
     Any other host gets a lighter MCP-only setup via ``_setup_other_host``.
     """
+    if host == "git":
+        _install_git_hook()
+        return
     if host and host not in (None, "claude"):
         _setup_other_host(host)
         return
