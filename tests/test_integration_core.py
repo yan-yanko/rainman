@@ -40,6 +40,14 @@ class TestIntegrationCore:
         assert "[Rainman]" in text
         assert "verify" in text
 
+    def test_session_start_carries_over_working_memory(self, engine):
+        e, _ = engine
+        e.add("The settlement cron runs at 03:17 UTC", category="convention")
+        e.recall("settlement cron")                     # puts it in focus
+        text = core.session_start_context(e)
+        assert "working memory carried over" in text    # focus block present
+        assert "03:17" in text
+
     def test_compaction_context_includes_topic_match(self, engine):
         e, _ = engine
         e.add("Database connection pool exhaustion caused timeouts", category="failure")

@@ -77,20 +77,38 @@ def auto_pull(engine) -> None:
 # configurable via ``auto_inject_min_trust``.
 
 def session_start_context(engine) -> Optional[str]:
-    """General project context for a fresh/resumed session, or None if empty."""
+    """Context for a fresh/resumed session, or None if there's nothing to show.
+
+    Leads with the WORKING-MEMORY set — the memories that were in focus in a
+    recent session (within the buffer's TTL) — so continuity carries across
+    sessions, then the general project context (recent + important)."""
     floor = engine.policy.get("auto_inject_min_trust")
     results = engine.context(limit=8, min_trust=floor)
-    if not results:
+    try:
+        focus = engine.working_set()
+    except Exception:  # noqa: BLE001 - working memory must never block session start
+        focus = []
+
+    if not results and not focus:
         return None
 
-    lines = ["[Rainman] Project memory loaded:\n"]
-    for i, r in enumerate(results, 1):
-        m = r.memory
-        line = f"  {i}. [{m.category}] {m.content[:120]}"
-        if m.file_refs:
-            line += f" (files: {', '.join(m.file_refs)})"
-        line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
-        lines.append(line)
+    lines = []
+    if focus:
+        lines.append("[Rainman] Recently in focus (working memory carried over):")
+        for i, m in enumerate(focus[:5], 1):
+            lines.append(f"  {i}. [{m.category}] {m.content[:110]}")
+        lines.append("")
+
+    if results:
+        lines.append(("[Rainman] Project memory loaded:" if not focus else "Project memory:") + "\n")
+        for i, r in enumerate(results, 1):
+            m = r.memory
+            line = f"  {i}. [{m.category}] {m.content[:120]}"
+            if m.file_refs:
+                line += f" (files: {', '.join(m.file_refs)})"
+            line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
+            lines.append(line)
+
     lines.append(
         "\nUse the `recall` tool to search for more specific knowledge. "
         "Use `remember` to save new learnings."
