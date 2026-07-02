@@ -1,33 +1,27 @@
 #!/usr/bin/env python3
 """
-SessionStart Hook
-==================
+SessionStart Hook — Claude Code adapter
+=======================================
 
-Fires when Claude Code starts or resumes a session, or after compaction.
-Outputs project context (recent + important memories) to stdout.
-Claude sees this as fresh context.
+Thin adapter over ``rainman.integration.core``: parses Claude Code's
+SessionStart payload and, for the compaction source, extracts a recent topic
+from the transcript. The context building and sync-pull are host-agnostic and
+live in the integration core.
 
 Sources:
-  - startup: New session → load general project context
-  - resume:  Resumed session → load general project context
-  - compact: After context compaction → re-inject topical + important memories
-             (This is the killer feature — recovers knowledge lost to compaction)
+  - startup / resume: load general project context
+  - compact:          re-inject topical + important memory (recovers knowledge
+                      lost to compaction — the killer feature)
 
 Register in .claude/settings.json:
 {
     "hooks": {
-        "SessionStart": [
-            {
-                "matcher": "",
-                "hooks": [{
-                    "type": "command",
-                    "command": "python -m rainman.hooks.session_start"
-                }]
-            }
-        ]
+        "SessionStart": [{
+            "matcher": "",
+            "hooks": [{"type": "command", "command": "python -m rainman.hooks.session_start"}]
+        }]
     }
 }
-
 An empty matcher fires on all sources (startup, resume, compact).
 """
 
@@ -43,7 +37,6 @@ def main():
     from rainman.core.encoding import ensure_utf8_io
     ensure_utf8_io()
 
-    # Read hook input from stdin
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, Exception) as e:
@@ -54,129 +47,33 @@ def main():
     cwd = hook_input.get("cwd", os.getcwd())
     source = hook_input.get("source", "startup")
 
-    # Import here to keep startup fast
     from rainman.core.engine import RainmanEngine
+    from rainman.integration import core
 
     engine = RainmanEngine(project_dir=cwd)
 
-    # Best-effort pull of teammates' shared memories. Silent on any failure —
-    # sync must never block or noise up session start.
-    _auto_pull(engine)
+    # Best-effort pull of teammates' shared memories. Silent on any failure.
+    core.auto_pull(engine)
 
     if source == "compact":
-        _handle_compaction(engine, hook_input)
+        topic = _extract_recent_topic(hook_input.get("transcript_path", ""))
+        print(core.compaction_context(engine, topic))
     else:
-        _handle_session_start(engine)
-
-
-def _auto_pull(engine):
-    """Pull from the sync remote if one is configured. Never raises."""
-    try:
-        from rainman.sync import SyncClient, SyncError
-        client = SyncClient(engine)
-        if client.is_configured():
-            client.pull()
-    except (SyncError, Exception) as e:
-        from rainman.core.log import get_logger
-        get_logger("hooks.session_start").warning("auto-pull skipped: %s", e)
-
-
-# Unsolicited context injection is the dangerous poisoning path (no query, no
-# user choice), so third-party (ingest/git) memories are held out of it by
-# default. Explicit `recall` tool calls still surface them. The floor is
-# org-policy-configurable via ``auto_inject_min_trust``.
-
-
-def _handle_session_start(engine):
-    """Normal session start — load general project context."""
-    floor = engine.policy.get("auto_inject_min_trust")
-    results = engine.context(limit=8, min_trust=floor)
-
-    if not results:
-        sys.exit(0)
-
-    lines = ["[Rainman] Project memory loaded:\n"]
-    for i, r in enumerate(results, 1):
-        m = r.memory
-        line = f"  {i}. [{m.category}] {m.content[:120]}"
-        if m.file_refs:
-            line += f" (files: {', '.join(m.file_refs)})"
-        line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
-        lines.append(line)
-
-    lines.append(
-        "\nUse the `recall` tool to search for more specific knowledge. "
-        "Use `remember` to save new learnings."
-    )
-
-    # Output to stdout — Claude sees this as context
-    print("\n".join(lines))
-
-
-def _handle_compaction(engine, hook_input):
-    """Post-compaction — re-inject topical + important memories."""
-    # Try to build a topical query from transcript
-    transcript_path = hook_input.get("transcript_path", "")
-    query = _extract_recent_topic(transcript_path)
-
-    lines = ["[Rainman] Re-injecting project memory after context compaction:\n"]
-
-    seen_ids = set()
-    floor = engine.policy.get("auto_inject_min_trust")
-
-    if query:
-        # Recall by topic — surface memories relevant to current work.
-        # Still unsolicited (compaction-triggered), so the auto-inject floor applies.
-        results = engine.recall(query, limit=5, min_trust=floor)
-        if results:
-            lines.append("Relevant to current work:")
-            for i, r in enumerate(results, 1):
-                m = r.memory
-                seen_ids.add(m.id)
-                line = f"  {i}. [{m.category}] {m.content[:150]}"
-                if m.file_refs:
-                    line += f"\n     files: {', '.join(m.file_refs)}"
-                line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
-                lines.append(line)
-            lines.append("")
-
-    # Always include high-importance context regardless of topic
-    context = engine.context(limit=5, min_trust=floor)
-    important = [r for r in context if r.memory.id not in seen_ids]
-    if important:
-        lines.append("High-importance project knowledge:")
-        for i, r in enumerate(important, 1):
-            m = r.memory
-            line = f"  {i}. [{m.category}] {m.content[:150]}"
-            if m.file_refs:
-                line += f"\n     files: {', '.join(m.file_refs)}"
-            line += f"\n     trust: {m.trust} | source: {m.source or 'unknown'}"
-            lines.append(line)
-
-    lines.append(
-        "\nUse `recall` to search for specific knowledge. "
-        "Use `remember` to save important learnings before next compaction."
-    )
-
-    print("\n".join(lines))
+        text = core.session_start_context(engine)
+        if text is None:
+            sys.exit(0)
+        print(text)  # Claude sees this as fresh context
 
 
 def _extract_recent_topic(transcript_path):
-    """
-    Extract recent topic from conversation transcript for topical recall.
-    Returns a query string or empty string if unavailable.
-    """
+    """Build a topical query from the tail of a Claude Code transcript (JSONL).
+    Transcript format is host-specific, so this parsing stays in the adapter."""
     if not transcript_path or not os.path.exists(transcript_path):
         return ""
-
     try:
-        # Read last N lines of transcript to get recent topic
         with open(transcript_path, encoding="utf-8") as f:
             lines = f.readlines()
-
-        # Take last 20 entries
         recent = lines[-20:] if len(lines) > 20 else lines
-
         texts = []
         for line in recent:
             line = line.strip()
@@ -186,8 +83,6 @@ def _extract_recent_topic(transcript_path):
                 entry = json.loads(line)
             except json.JSONDecodeError:
                 continue
-
-            # Extract assistant text (reuse session_end's logic)
             role = entry.get("role", "")
             if role == "assistant":
                 content = entry.get("content", "")
@@ -199,8 +94,6 @@ def _extract_recent_topic(transcript_path):
                             text = block.get("text", "")
                             if text:
                                 texts.append(text[:200])
-
-            # Also check "message" wrapper
             message = entry.get("message", {})
             if isinstance(message, dict) and message.get("role") == "assistant":
                 content = message.get("content", "")
@@ -212,15 +105,10 @@ def _extract_recent_topic(transcript_path):
                             text = block.get("text", "")
                             if text:
                                 texts.append(text[:200])
-
         if texts:
-            # Combine recent text into a search query (last 500 chars)
-            combined = " ".join(texts)
-            return combined[-500:]
-
+            return " ".join(texts)[-500:]
     except (OSError, IOError):
         pass
-
     return ""
 
 
