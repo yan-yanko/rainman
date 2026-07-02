@@ -397,6 +397,20 @@ def capture_learnings(engine, assistant_text: str, cwd=None,
     return stored
 
 
+def maybe_sleep(engine) -> dict:
+    """Optionally run the consolidation/forgetting 'sleep' pass at session end —
+    the human analog of offline memory reorganization. Off by default; enable
+    with org/project policy ``consolidate_on_session_end``. Never raises."""
+    if not engine.policy.get("consolidate_on_session_end"):
+        return {"n_promoted": 0, "n_forgotten": 0, "promoted": [], "forgotten": []}
+    try:
+        return engine.consolidate()
+    except Exception as e:  # noqa: BLE001 - must never block session end
+        from rainman.core.log import get_logger
+        get_logger("integration.core").warning("sleep pass skipped: %s", e)
+        return {"n_promoted": 0, "n_forgotten": 0, "promoted": [], "forgotten": []}
+
+
 # --- learn from a git commit (host-independent — works in ANY editor) --------
 # Trivial commits that carry no reusable knowledge.
 _TRIVIAL_COMMIT_PREFIXES = (

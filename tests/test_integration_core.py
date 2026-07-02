@@ -139,3 +139,36 @@ class TestLearnFromCommit:
                             lambda k, d=None: True if k == "disable_auto_learn" else d)
         assert core.learn_from_commit(e, "Fix a real and important bug here", []) is None
         assert e.store.load_all() == []
+
+
+@pytest.mark.unit
+class TestMaybeSleep:
+    """The optional session-end 'sleep' pass — off unless policy enables it."""
+
+    def _engine(self, tmp_path):
+        p, g = str(tmp_path / "p"), str(tmp_path / "g")
+        os.makedirs(p)
+        os.makedirs(g)
+        e = RainmanEngine(project_dir=p, global_dir=g)
+        e.store.init_project(p)
+        e.store.init_global()
+        return e
+
+    def test_off_by_default(self, tmp_path):
+        e = self._engine(tmp_path)
+        for i in range(3):
+            e.add(f"batch deadlocked on the ledger table under concurrency (run {i})",
+                  category="failure", file_refs=["src/ledger.py"], source="hook:post_tool_use:Bash")
+        report = core.maybe_sleep(e)         # policy not set
+        assert report["n_promoted"] == 0     # did not run
+
+    def test_runs_when_policy_enabled(self, tmp_path, monkeypatch):
+        e = self._engine(tmp_path)
+        for i in range(3):
+            e.add(f"batch deadlocked on the ledger table under concurrency (run {i})",
+                  category="failure", file_refs=["src/ledger.py"], source="hook:post_tool_use:Bash")
+        real_get = e.policy.get
+        monkeypatch.setattr(e.policy, "get",
+                            lambda k: True if k == "consolidate_on_session_end" else real_get(k))
+        report = core.maybe_sleep(e)
+        assert report["n_promoted"] >= 1

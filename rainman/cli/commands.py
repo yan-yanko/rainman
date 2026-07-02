@@ -334,6 +334,21 @@ def cmd_context(limit: int = 10, fmt: Optional[str] = None) -> None:
         print(f"  {i}. [{m.category}] {m.content[:100]}")
 
 
+def cmd_consolidate(dry_run: bool = False, forget: bool = True) -> None:
+    """The offline 'sleep' pass: promote recurring episodic memories into
+    semantic generalizations, and functionally forget stale auto-learned noise."""
+    engine = _get_engine()
+    report = engine.consolidate(forget=forget, dry_run=dry_run)
+    would = "would " if dry_run else ""
+    n_f = report["n_forgotten"]
+    print(f"{would}promote {report['n_promoted']} generalization(s); "
+          f"{would}forget {n_f} stale memor{'y' if n_f == 1 else 'ies'}.")
+    for p in report["promoted"]:
+        print(f"  + {p['content'][:110]}  (from {len(p['from'])} events)")
+    if not report["promoted"] and not n_f:
+        print("  Nothing to consolidate yet — needs recurring episodic memories.")
+
+
 def cmd_ingest(git: bool = False, files: bool = False, limit: int = 50, depth: int = 4) -> None:
     """Ingest project history and structure into memory."""
     if not git and not files:

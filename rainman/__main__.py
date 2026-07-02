@@ -107,6 +107,12 @@ def main():
     sub.add_parser("learn-commit", help="Store the latest git commit as memory "
                    "(host-independent auto-learn; runs from a post-commit hook)")
 
+    # consolidate
+    p_consol = sub.add_parser("consolidate", help="Sleep pass: promote recurring "
+                              "events into generalizations + forget stale noise")
+    p_consol.add_argument("--dry-run", action="store_true", help="Report without writing")
+    p_consol.add_argument("--no-forget", action="store_true", help="Skip functional forgetting")
+
     # doctor
     sub.add_parser("doctor", help="Self-test: verify engine, storage, and integrations")
 
@@ -124,7 +130,7 @@ def main():
         cmd_init, cmd_add, cmd_recall, cmd_status,
         cmd_links, cmd_export, cmd_context, cmd_ingest,
         cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
-        cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit,
+        cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit, cmd_consolidate,
     )
 
     if args.command == "init":
@@ -165,6 +171,8 @@ def main():
         cmd_mcp_config(host=args.host)
     elif args.command == "learn-commit":
         cmd_learn_commit()
+    elif args.command == "consolidate":
+        cmd_consolidate(dry_run=args.dry_run, forget=not args.no_forget)
     elif args.command == "doctor":
         cmd_doctor()
     elif args.command == "serve":

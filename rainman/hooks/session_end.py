@@ -59,6 +59,7 @@ def main():
 
     engine = RainmanEngine(project_dir=cwd)
     core.capture_learnings(engine, assistant_text, cwd)
+    core.maybe_sleep(engine)  # optional offline consolidation (policy-gated, off by default)
 
     # Silent — session is ending, no context to inject.
     sys.exit(0)

@@ -771,6 +771,63 @@ class RainmanEngine:
         self._ensure_loaded()
         return list(self._memories)
 
+    def consolidate(self, forget: bool = True, dry_run: bool = False) -> Dict:
+        """The offline "sleep" pass (zero-LLM). Two human-memory operations:
+
+        1. **Episodic -> semantic.** Recurring episodic memories that share
+           distinctive terms/files are abstracted into a semantic GENERALIZATION
+           card (Squire's "extract common elements across events"), which links
+           back to the source events (so they stop being orphans).
+        2. **Functional forgetting.** Old, un-recalled, low-value, ORPHAN,
+           auto-learned memories are dropped (Ebbinghaus adaptive forgetting) —
+           never user knowledge, linked memories, generalizations, or cards.
+
+        Opt-in (CLI ``rainman consolidate`` / optionally at session end). Returns
+        a report; ``dry_run`` computes it without writing.
+        """
+        self._ensure_loaded()
+        from rainman.core import consolidate as C
+        now = time.time()
+        promoted, forgotten = [], []
+
+        # 1. Episodic -> semantic generalizations.
+        for cluster in C.find_episodic_clusters(self._memories):
+            content, category, file_refs, terms = C.generalize(cluster)
+            src_ids = [m.id for m in cluster]
+            if dry_run:
+                promoted.append({"content": content, "from": src_ids})
+                continue
+            gen = self.add(
+                content=content, category=category, file_refs=file_refs,
+                source="hook:consolidation", layer=cluster[0].layer,
+                metadata={"consolidated": True, "consolidated_from": src_ids,
+                          "recurrence": len(cluster), "terms": terms},
+            )
+            # Link the generalization <-> its source events (both directions), and
+            # mark the events so a later pass won't re-consolidate them.
+            gen.linked_ids = list(dict.fromkeys([*gen.linked_ids, *src_ids]))
+            for m in cluster:
+                if gen.id not in m.linked_ids:
+                    m.linked_ids.append(gen.id)
+                m.metadata = {**(m.metadata or {}), "consolidated_into": gen.id}
+            promoted.append({"id": gen.id, "content": content, "from": src_ids})
+
+        # 2. Functional forgetting (conservative).
+        if forget and not self.policy.get("disable_forgetting"):
+            drop_ids = set(C.forgettable(self._memories, now))
+            forgotten = sorted(drop_ids)
+            if drop_ids and not dry_run:
+                self._memories = [m for m in self._memories if m.id not in drop_ids]
+
+        if not dry_run and (promoted or forgotten):
+            self.store.save_all(self._memories)
+            self.audit.record(
+                "consolidate", actor=current_actor(),
+                memory_ids=[p["id"] for p in promoted if p.get("id")],
+            )
+        return {"promoted": promoted, "forgotten": forgotten,
+                "n_promoted": len(promoted), "n_forgotten": len(forgotten)}
+
     # ── Internal ────────────────────────────────────────────────
 
     def _calc_importance(self, content: str, category: str) -> float:

@@ -32,6 +32,7 @@ rainman/
     storage.py      StorageBackend Protocol + make_store() backend factory
     redact.py       Secret redaction + path denylist (+ org-policy extras) for auto-learn safety
     salience.py     Write-side curation: score how worth-remembering an auto-learned memory is (gate hook spam)
+    consolidate.py  Offline "sleep" pass: episodic->semantic generalization (extract common elements across recurring events) + functional forgetting (Ebbinghaus adaptive decay of un-recalled orphan noise). Zero-LLM. Wired via engine.consolidate() / `rainman consolidate`.
     audit.py        Append-only JSONL audit log (opt-in, batched) — store/recall/forget/retention
     config.py       Policy control plane (org.enforce > project > user > org.defaults > builtin)
     log.py          Structured stdlib logging (RAINMAN_LOG_LEVEL)
@@ -112,6 +113,11 @@ Memory:
   file_refs: List[str]       # files this memory relates to
   layer: str                 # "project" | "global"
   metadata: Dict[str, Any]
+
+  # Derived (no stored field): .memory_type -> episodic (context-tagged event:
+  # file_refs / experience card) | procedural (convention/pattern rule) |
+  # semantic (context-free fact/decision/note, and any consolidated generalization).
+  # Mirrors the Squire/Tulving declarative-memory taxonomy; used by consolidation.
 ```
 
 ## Scoring — Fixed Weights
@@ -169,6 +175,7 @@ rainman review [approve|reject] <id>  # Review quarantined memories (Ph2c)
 rainman migrate --to sqlite|json      # Switch storage backend (Ph2a)
 rainman remote add <url> <ws> --token # Configure sync remote (Ph2b)
 rainman sync                          # Push + pull project memories (Ph2b)
+rainman consolidate [--dry-run] [--no-forget]  # "Sleep" pass: promote recurring events -> generalizations + forget stale noise
 ```
 
 ## Team sync (client side)

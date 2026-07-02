@@ -52,6 +52,28 @@ class Memory:
         from rainman.core.trust import trust_level
         return trust_level(self.source)
 
+    @property
+    def memory_type(self) -> str:
+        """Cognitive memory type — DERIVED, no stored field, no migration.
+
+        Mirrors the declarative-memory taxonomy (Squire; Tulving):
+          episodic   a context-tagged SPECIFIC EVENT (time + place): a
+                     typed-causal experience card, or a failure/solution anchored
+                     to file_refs — "this happened, here."
+          procedural a reusable rule / how-to: a convention or pattern.
+          semantic   a context-free FACT: a decision, note, or a lesson with no
+                     place anchor — and any consolidated GENERALIZATION (an
+                     abstraction extracted across many events is semantic).
+        """
+        md = self.metadata if isinstance(self.metadata, dict) else {}
+        if md.get("consolidated"):
+            return "semantic"
+        if "experience" in md or (self.category in ("failure", "solution") and self.file_refs):
+            return "episodic"
+        if self.category in ("convention", "pattern"):
+            return "procedural"
+        return "semantic"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -113,6 +135,7 @@ class RecallResult:
             "importance_score": round(self.importance_score, 4),
             "associative_score": round(self.associative_score, 4),
             "trust": self.memory.trust,
+            "memory_type": self.memory.memory_type,
             "trust_prior": round(self.trust_prior, 4),
             "task_affinity": round(self.task_affinity, 4),
         }
