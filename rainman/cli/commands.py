@@ -334,6 +334,29 @@ def cmd_context(limit: int = 10, fmt: Optional[str] = None) -> None:
         print(f"  {i}. [{m.category}] {m.content[:100]}")
 
 
+def cmd_working() -> None:
+    """Show the working-memory set — the memories in focus this session."""
+    engine = _get_engine()
+    mems = engine.working_set()
+    if not mems:
+        print("Working memory is empty (nothing recalled recently this session).")
+        return
+    print("Working memory (in focus, most recent first):")
+    for i, m in enumerate(mems, 1):
+        print(f"  {i}. [{m.category}/{m.memory_type}] {m.content[:100]}")
+
+
+def cmd_reconsolidate(memory_id: str, addition: str, replace: bool = False) -> None:
+    """Integrate new information into an existing memory in place (reconsolidation)."""
+    engine = _get_engine()
+    m = engine.reconsolidate(memory_id, addition, replace=replace)
+    if m is None:
+        print(f"No memory with id {memory_id} (or empty addition).")
+        return
+    print(f"Reconsolidated {m.id} [{m.category}]:")
+    print(f"  {m.content[:220]}")
+
+
 def cmd_consolidate(dry_run: bool = False, forget: bool = True) -> None:
     """The offline 'sleep' pass: promote recurring episodic memories into
     semantic generalizations, and functionally forget stale auto-learned noise."""

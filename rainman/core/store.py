@@ -67,6 +67,11 @@ class MemoryStore:
         """Resolved global-layer directory."""
         return self._global_dir
 
+    def state_dir(self) -> str:
+        """Directory for transient session state (working memory, etc.) — the
+        project layer if present, else the global layer."""
+        return self._project_dir if self._project_dir else self._global_dir
+
     def load_all(self) -> List[Memory]:
         """Load memories from both layers."""
         memories = []

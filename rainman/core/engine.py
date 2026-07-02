@@ -12,6 +12,7 @@ Two-phase retrieval:
 All operations are local, zero-LLM, zero-cost.
 """
 
+import os
 import time
 import uuid
 from typing import Dict, List, Optional, Any
@@ -78,6 +79,12 @@ LINK_THRESHOLD = 0.25
 
 # Max memories before oldest low-value entries are pruned
 MAX_MEMORIES = 2000
+
+# Reconsolidation labile window (seconds). Retrieving a memory returns it to a
+# labile, UPDATABLE state (Nader 2015); a re-observation of a memory recalled
+# within this window is integrated in place rather than stored as a duplicate.
+# No prediction-error/mismatch gate — the research refuted that precondition.
+LABILE_WINDOW = 30 * 60
 
 # Consolidation (M5). A new note this similar to an existing one is treated as a
 # re-observation and MERGED (reinforced) rather than stored as a duplicate.
@@ -241,6 +248,11 @@ class RainmanEngine:
         if category == "note" and "experience" not in metadata:
             dup = self._find_duplicate(content, layer)
             if dup is not None:
+                # Reconsolidation: if this memory was RECALLED recently it is
+                # labile — integrate any novel wording of the re-observation into
+                # it, instead of discarding the update (Nader 2015). Capture the
+                # prior recall time before we refresh the stats below.
+                prior_recall = dup.last_recalled
                 dup.recall_count += 1
                 dup.last_recalled = ts
                 dup.timestamp = ts  # re-observed -> refresh recency
@@ -248,6 +260,8 @@ class RainmanEngine:
                     dup.tags = list(dict.fromkeys([*dup.tags, *tags]))[:MAX_TAGS]
                 if file_refs:
                     dup.file_refs = list(dict.fromkeys([*dup.file_refs, *file_refs]))[:MAX_FILE_REFS]
+                if prior_recall and (ts - prior_recall) < LABILE_WINDOW:
+                    self._integrate_content(dup, content)
                 self.store.save_one(dup)
                 self.audit.record(
                     "consolidate_merge", actor=author,
@@ -610,6 +624,12 @@ class RainmanEngine:
         for layer, updates in updates_by_layer.items():
             self.store.update_rehearsal_stats(updates, layer)
 
+        # Working memory: the surfaced memories are now "in focus" this session.
+        try:
+            self._working().touch([r.memory.id for r in top_results], now)
+        except Exception:  # noqa: BLE001 - working memory must never break recall
+            pass
+
         if self.audit.enabled:
             self.audit.record(
                 "recall", actor=current_actor(),
@@ -715,6 +735,54 @@ class RainmanEngine:
         self.store.save_one(m)
         return True
 
+    def _integrate_content(self, m: Memory, addition: str) -> bool:
+        """Merge ``addition`` into ``m.content`` in place, preserving the prior
+        version in ``metadata['revisions']`` (capped). No-op if the addition is
+        empty or already present. The mechanical core of reconsolidation."""
+        addition = (addition or "").strip()
+        if not addition or addition.lower() in m.content.lower():
+            return False
+        revisions = list(m.metadata.get("revisions", [])) if isinstance(m.metadata, dict) else []
+        revisions.append({"content": m.content, "at": m.timestamp})
+        m.content = f"{m.content}\n{addition}"[:MAX_CONTENT_LENGTH]
+        m.metadata = {**(m.metadata or {}), "revisions": revisions[-5:]}
+        return True
+
+    def reconsolidate(self, memory_id: str, addition: str,
+                      replace: bool = False) -> Optional[Memory]:
+        """Integrate new information into an existing memory IN PLACE — the
+        labile window after recall (reconsolidation). Prior content is kept in
+        ``metadata['revisions']``; recency + rehearsal are refreshed; links and
+        importance are recomputed. Returns the updated Memory, or None if the id
+        is unknown or the addition is empty. ``replace=True`` overwrites content
+        instead of appending."""
+        self._ensure_loaded()
+        m = self._find_by_id(memory_id)
+        addition = (addition or "").strip()[:MAX_CONTENT_LENGTH]
+        if not m or not addition:
+            return None
+
+        changed = True
+        if replace:
+            revisions = list(m.metadata.get("revisions", [])) if isinstance(m.metadata, dict) else []
+            revisions.append({"content": m.content, "at": m.timestamp})
+            m.content = addition
+            m.metadata = {**(m.metadata or {}), "revisions": revisions[-5:]}
+            m.importance = self._calc_importance(m.content, m.category)
+        else:
+            changed = self._integrate_content(m, addition)
+
+        m.timestamp = time.time()
+        m.recall_count += 1
+        m.last_recalled = m.timestamp
+        if changed:
+            related = [x for x in self._find_related(m.content, tags=m.tags, file_refs=m.file_refs)
+                       if x != m.id]
+            m.linked_ids = list(dict.fromkeys([*m.linked_ids, *related]))
+        self.store.save_one(m)
+        self.audit.record("reconsolidate", actor=current_actor(), memory_ids=[m.id])
+        return m
+
     def forget(self, memory_id: str) -> bool:
         """Remove a specific memory."""
         self._ensure_loaded()
@@ -770,6 +838,21 @@ class RainmanEngine:
         """Return all memories."""
         self._ensure_loaded()
         return list(self._memories)
+
+    def _working(self):
+        """Lazy working-memory buffer (session-scoped, persisted in the state dir)."""
+        if getattr(self, "_wm", None) is None:
+            from rainman.core.working import WorkingMemory
+            self._wm = WorkingMemory(os.path.join(self.store.state_dir(), "working.json"))
+        return self._wm
+
+    def working_set(self) -> List[Memory]:
+        """Memories currently in the working-memory buffer (most recent first) —
+        what's 'in focus' this session. Capacity-limited, TTL-decayed."""
+        self._ensure_loaded()
+        ids = self._working().active(time.time())
+        by_id = {m.id: m for m in self._memories}
+        return [by_id[i] for i in ids if i in by_id]
 
     def consolidate(self, forget: bool = True, dry_run: bool = False) -> Dict:
         """The offline "sleep" pass (zero-LLM). Two human-memory operations:

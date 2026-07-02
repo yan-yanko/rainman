@@ -33,6 +33,7 @@ rainman/
     redact.py       Secret redaction + path denylist (+ org-policy extras) for auto-learn safety
     salience.py     Write-side curation: score how worth-remembering an auto-learned memory is (gate hook spam)
     consolidate.py  Offline "sleep" pass: episodic->semantic generalization (extract common elements across recurring events) + functional forgetting (Ebbinghaus adaptive decay of un-recalled orphan noise). Zero-LLM. Wired via engine.consolidate() / `rainman consolidate`.
+    working.py      Working-memory buffer: capacity-limited (7±2) TTL'd LRU of the memories in focus this session (Miller/Baddeley). Persisted to .rainman/working.json; recall() touches it; engine.working_set() / `rainman working`.
     audit.py        Append-only JSONL audit log (opt-in, batched) — store/recall/forget/retention
     config.py       Policy control plane (org.enforce > project > user > org.defaults > builtin)
     log.py          Structured stdlib logging (RAINMAN_LOG_LEVEL)
@@ -176,6 +177,8 @@ rainman migrate --to sqlite|json      # Switch storage backend (Ph2a)
 rainman remote add <url> <ws> --token # Configure sync remote (Ph2b)
 rainman sync                          # Push + pull project memories (Ph2b)
 rainman consolidate [--dry-run] [--no-forget]  # "Sleep" pass: promote recurring events -> generalizations + forget stale noise
+rainman reconsolidate <id> "new info" [--replace]  # Update a memory in place (labile-window integration; keeps revision history)
+rainman working                       # Show the working-memory set (what's in focus this session)
 ```
 
 ## Team sync (client side)

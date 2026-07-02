@@ -113,6 +113,15 @@ def main():
     p_consol.add_argument("--dry-run", action="store_true", help="Report without writing")
     p_consol.add_argument("--no-forget", action="store_true", help="Skip functional forgetting")
 
+    # reconsolidate
+    p_recon = sub.add_parser("reconsolidate", help="Update a memory in place (integrate new info)")
+    p_recon.add_argument("memory_id", help="Id of the memory to update")
+    p_recon.add_argument("addition", help="New information to integrate")
+    p_recon.add_argument("--replace", action="store_true", help="Replace content instead of appending")
+
+    # working
+    sub.add_parser("working", help="Show the working-memory set (what's in focus this session)")
+
     # doctor
     sub.add_parser("doctor", help="Self-test: verify engine, storage, and integrations")
 
@@ -131,6 +140,7 @@ def main():
         cmd_links, cmd_export, cmd_context, cmd_ingest,
         cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
         cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit, cmd_consolidate,
+        cmd_reconsolidate, cmd_working,
     )
 
     if args.command == "init":
@@ -173,6 +183,10 @@ def main():
         cmd_learn_commit()
     elif args.command == "consolidate":
         cmd_consolidate(dry_run=args.dry_run, forget=not args.no_forget)
+    elif args.command == "reconsolidate":
+        cmd_reconsolidate(args.memory_id, args.addition, replace=args.replace)
+    elif args.command == "working":
+        cmd_working()
     elif args.command == "doctor":
         cmd_doctor()
     elif args.command == "serve":
