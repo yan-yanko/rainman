@@ -64,42 +64,51 @@ rainman doctor
 
 ## Editor Integration
 
-### Automatic Setup (recommended)
+Rainman is **host-agnostic** — it works with any AI coding tool, not just Claude
+Code. Its MCP server speaks standard MCP (so any MCP client can use the
+`recall` / `remember` / `context` / `links` / `status` tools), and a git
+post-commit hook gives cross-session auto-learn in **any** editor. Full guide:
+**[INTEGRATIONS.md](INTEGRATIONS.md)**.
 
 ```bash
-rainman setup
+# Print the MCP config for your editor (paste where it says):
+rainman mcp-config --host cursor     # or vscode | windsurf | cline | zed | continue
+rainman mcp-config                   # generic snippet + the full host list
+
+# …or let Rainman write the project-local config for you:
+rainman setup --host cursor          # writes .cursor/mcp.json
+
+# Auto-learn from commits in ANY editor:
+rainman setup --host git             # installs .git/hooks/post-commit
 ```
 
-This registers Rainman with **both** Claude Code and VS Code in one command:
-- Creates `.claude/settings.json` with hooks
-- Creates `.mcp.json` for Claude Code MCP
-- Creates `.vscode/mcp.json` for VS Code Copilot / Cline
-- Registers the MCP server with `claude mcp add`
+### Claude Code (full auto-surfacing)
 
-### Claude Code
-
-MCP server gives Claude 5 tools: `recall`, `remember`, `context`, `links`, `status`.
+Claude Code is the one host with a hook lifecycle, so it gets push-based
+auto-surfacing on top of MCP:
 
 ```bash
-claude mcp add rainman -- python -m rainman serve
+rainman setup        # MCP + SessionStart/PostToolUse/SessionEnd hooks, one command
 ```
 
-### VS Code (Copilot / Continue / Cline)
+### Any MCP host (Cursor, VS Code/Copilot, Windsurf, Cline, Zed, Continue)
 
-`rainman setup` creates `.vscode/mcp.json` automatically. Or add manually:
+The model calls Rainman's tools when relevant (pull). Config shapes differ per
+host (`mcpServers` vs VS Code's `servers` vs Zed's nested `context_servers`) —
+`rainman mcp-config --host <name>` prints the right one. Example (Cursor):
 
 ```json
-{
-  "servers": {
-    "rainman": {
-      "command": "python",
-      "args": ["-m", "rainman", "serve"]
-    }
-  }
-}
+{ "mcpServers": { "rainman": { "command": "python", "args": ["-m", "rainman", "serve"] } } }
 ```
 
-Open Copilot Chat → select **Agent mode** → Rainman tools are available.
+### aider / CLI / scripts
+
+Pipe memory into any tool with `--format`:
+
+```bash
+aider --read <(rainman context --format md)
+/run rainman recall "auth token validation" --format plain
+```
 
 ### Hooks (Claude Code only)
 

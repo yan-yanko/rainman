@@ -48,6 +48,8 @@ def main():
     p_recall.add_argument("query", help="Search query")
     p_recall.add_argument("--limit", "-n", type=int, default=5)
     p_recall.add_argument("--category", "-c")
+    p_recall.add_argument("--format", "-F", choices=["rich", "plain", "md"], default="rich",
+                          help="Output format for piping into other tools (plain/md)")
 
     # status
     sub.add_parser("status", help="Show memory statistics")
@@ -59,6 +61,8 @@ def main():
     # context
     p_context = sub.add_parser("context", help="Show current working context")
     p_context.add_argument("--limit", "-n", type=int, default=10)
+    p_context.add_argument("--format", "-F", choices=["rich", "plain", "md"], default="rich",
+                           help="Output format for piping into other tools (plain/md)")
 
     # export
     sub.add_parser("export", help="Dump all memories as JSON")
@@ -134,13 +138,15 @@ def main():
             is_global=args.is_global,
         )
     elif args.command == "recall":
-        cmd_recall(query=args.query, limit=args.limit, category=args.category)
+        fmt = None if args.format == "rich" else args.format
+        cmd_recall(query=args.query, limit=args.limit, category=args.category, fmt=fmt)
     elif args.command == "status":
         cmd_status()
     elif args.command == "links":
         cmd_links(ref=args.ref)
     elif args.command == "context":
-        cmd_context(limit=args.limit)
+        fmt = None if args.format == "rich" else args.format
+        cmd_context(limit=args.limit, fmt=fmt)
     elif args.command == "export":
         cmd_export()
     elif args.command == "ingest":

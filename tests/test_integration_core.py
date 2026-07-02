@@ -65,6 +65,24 @@ class TestIntegrationCore:
         core.learn_from_tool(e, "WebFetch", {"url": "x"}, "stuff", project)
         assert e.store.load_all() == []
 
+    def test_recall_format_plain_and_md(self, engine, capsys):
+        """--format plain/md let any tool (aider, a script) pipe recall output."""
+        from rainman.cli.commands import _render_memories
+        e, _ = engine
+        e.add("Auth uses verify_quill_sig not JWT", category="convention",
+              file_refs=["src/auth.py"])
+        results = e.recall("auth")
+
+        assert _render_memories(results, "plain") is True
+        out = capsys.readouterr().out
+        assert "verify_quill_sig" in out and "[convention]" not in out  # content only
+
+        assert _render_memories(results, "md") is True
+        out = capsys.readouterr().out
+        assert "**[convention]**" in out and "src/auth.py" in out
+
+        assert _render_memories(results, None) is False  # falls through to rich output
+
     def test_capture_learnings_mines_a_decision(self, engine):
         e, project = engine
         n = core.capture_learnings(

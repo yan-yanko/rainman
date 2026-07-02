@@ -44,7 +44,10 @@ rainman/
     server.py       MCP stdio server (JSON-RPC 2.0, 5 tools)
   cli/
     commands.py     CLI command implementations (init, add, recall, status, setup, doctor)
-  hooks/
+  integration/
+    core.py         HOST-AGNOSTIC behaviours (auto_pull, session_start_context, compaction_context, learn_from_tool, capture_learnings, learn_from_commit). The hooks are thin adapters over this; other hosts (git, aider, MCP) reuse it. Zero host coupling.
+    hosts.py        Registry of MCP-capable hosts (Cursor/VS Code/Windsurf/Cline/Zed/Continue/Claude) + config shapes; powers `mcp-config` / `setup --host`
+  hooks/             (Claude Code ADAPTERS — parse Claude's stdin/transcript, delegate to integration/core)
     session_start.py   Load project context at session start (also handles post-compaction re-injection)
     post_compact.py    Legacy compaction hook (logging only; re-injection moved to session_start)
     post_tool_use.py   Auto-learn from file reads, edits, test runs (salience-gated; Bash outcomes -> typed-causal experience cards w/ failure->fix pairing)

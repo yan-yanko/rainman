@@ -71,17 +71,46 @@ def cmd_add(
         print(f"  linked to: {len(m.linked_ids)} memories")
 
 
+def _render_memories(results, fmt) -> bool:
+    """Render recalled memories for piping into another tool (aider, a script,
+    any host). Returns True if it handled the format, False to fall through to
+    the default rich output.
+
+      plain  one memory's content per line (feed straight into a prompt)
+      md     markdown bullets (e.g. `aider --read <(rainman context -F md)`)
+    """
+    if fmt == "plain":
+        for r in results:
+            print(r.memory.content)
+        return True
+    if fmt == "md":
+        for r in results:
+            m = r.memory
+            line = f"- **[{m.category}]** {m.content}"
+            if m.file_refs:
+                line += f"  _(files: {', '.join(m.file_refs)})_"
+            print(line)
+        return True
+    return False
+
+
 def cmd_recall(
     query: str,
     limit: int = 5,
     category: Optional[str] = None,
+    fmt: Optional[str] = None,
 ) -> None:
     """Search memories by query."""
     engine = _get_engine()
     results = engine.recall(query, limit=limit, category=category)
 
     if not results:
+        if fmt in ("plain", "md"):
+            return  # stay silent so piping produces clean, empty output
         print("No memories found.")
+        return
+
+    if _render_memories(results, fmt):
         return
 
     for i, r in enumerate(results, 1):
@@ -285,13 +314,18 @@ def cmd_export() -> None:
     print()  # trailing newline
 
 
-def cmd_context(limit: int = 10) -> None:
+def cmd_context(limit: int = 10, fmt: Optional[str] = None) -> None:
     """Show current working context (recent + important)."""
     engine = _get_engine()
     results = engine.context(limit=limit)
 
     if not results:
+        if fmt in ("plain", "md"):
+            return
         print("No memories yet.")
+        return
+
+    if _render_memories(results, fmt):
         return
 
     print("Current context:")
