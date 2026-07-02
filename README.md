@@ -172,6 +172,17 @@ Rehearsal multipliers are capped (keyword: max 2x, recency: max 2.5x) to prevent
 
 This means when you recall a memory about "voting bias", related memories about "RLHF", "political identity", and "election predictor" get boosted too — even if they don't directly match your query.
 
+### Cognitively grounded
+
+Rainman's two-phase spreading activation, power-law decay, and recency+frequency
+scoring aren't ad hoc — they're the *reliable* mechanisms of human memory
+(Collins & Loftus 1975; Ebbinghaus; ACT-R). It also does episodic→semantic
+consolidation, a "sleep" pass with adaptive forgetting, reconsolidation, and a
+working-memory buffer. It deliberately omits the one mechanism that makes human
+memory *unreliable* — reconstruction, i.e. false memories — which is exactly the
+part you'd need an LLM for. See **[COGNITIVE_MODEL.md](COGNITIVE_MODEL.md)** for
+the mechanism-by-mechanism map (each with the paper *and* the line of code).
+
 ### Layered Storage
 
 ```
