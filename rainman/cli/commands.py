@@ -335,8 +335,73 @@ def cmd_ingest(git: bool = False, files: bool = False, limit: int = 50, depth: i
     print(f"\nTotal: {total} memories added")
 
 
-def cmd_setup() -> None:
-    """One-command setup: init project + register MCP server + configure hooks."""
+def cmd_mcp_config(host=None) -> None:
+    """Print the MCP config snippet + path for a host (safe, paste-ready)."""
+    from rainman.integration import hosts
+
+    if host is None:
+        print("Rainman speaks standard MCP — usable by any MCP-capable client.\n")
+        print("Generic config (most clients use this shape):\n")
+        print(hosts.snippet_text("generic"))
+        others = [h for h in hosts.known_hosts() if h != "generic"]
+        print("\nFor a specific host:  rainman mcp-config --host <name>")
+        print("Supported hosts: " + ", ".join(others))
+        return
+    if host not in hosts.HOSTS:
+        print(f"Unknown host '{host}'. Known: {', '.join(hosts.known_hosts())}")
+        return
+    spec = hosts.HOSTS[host]
+    print(f"{spec['display']}  —  {spec['path']}\n")
+    print(hosts.snippet_text(host))
+    print(f"\nNote: {spec['note']}")
+
+
+def _setup_other_host(host) -> None:
+    """Lighter setup for a non-Claude MCP host: init + write/print its config."""
+    from rainman.integration import hosts
+
+    if host not in hosts.HOSTS:
+        print(f"Unknown host '{host}'. Known: {', '.join(hosts.known_hosts())}")
+        return
+
+    spec = hosts.HOSTS[host]
+    project_dir = os.getcwd()
+    print(f"Setting up Rainman for {spec['display']} ...\n")
+
+    print("1. Initializing .rainman/ ...")
+    store = MemoryStore(project_dir=project_dir)
+    path = store.init_project(project_dir)
+    store.init_global()
+    print(f"   Done: {path}")
+
+    print("\n2. MCP server config ...")
+    if hosts.is_project_local(host):
+        cfg_path = os.path.join(project_dir, spec["path"])
+        try:
+            print(f"   {hosts.merge_into(cfg_path, host)}")
+        except Exception as e:
+            print(f"   Warning: could not write {cfg_path}: {e}")
+            print(hosts.snippet_text(host))
+    else:
+        print(f"   {spec['display']} uses a global config: {spec['path']}")
+        print("   Add this:\n")
+        print(hosts.snippet_text(host))
+    print(f"\n   Note: {spec['note']}")
+
+    print("\nRainman tools (recall/remember/context/links/status) are now available "
+          "in this host\n(the model calls them when relevant).")
+
+
+def cmd_setup(host=None) -> None:
+    """One-command setup: init project + register MCP server + configure hooks.
+
+    ``--host claude`` (default) does the full Claude Code flow (MCP + hooks).
+    Any other host gets a lighter MCP-only setup via ``_setup_other_host``.
+    """
+    if host and host not in (None, "claude"):
+        _setup_other_host(host)
+        return
+
     import shutil
     import subprocess
 
