@@ -127,3 +127,39 @@ class TestRedactionExtensions:
         assert safe_content("some content here that is long enough to keep",
                             file_path="config/topsecret.conf",
                             extra_path_denylist=["topsecret"]) is None
+
+
+@pytest.mark.unit
+class TestPolicyExplain:
+    """`rainman policy` provenance report: effective value + which layer set it."""
+
+    def test_builtin_provenance(self):
+        p = Policy(enforce={}, project={}, user={}, org_defaults={})
+        info = p.explain()["audit"]
+        assert info["value"] is DEFAULTS["audit"]
+        assert info["source"] == "builtin" and info["locked"] is False
+
+    def test_layer_provenance_order(self):
+        p = Policy(
+            enforce={"audit": True},
+            project={"audit": False, "retention_days": 30},
+            user={"retention_days": 7, "disable_auto_learn": True},
+            org_defaults={"disable_auto_learn": False, "quarantine_ingest": True},
+        )
+        rep = p.explain()
+        assert rep["audit"] == {"value": True, "source": "org.enforce", "locked": True}
+        assert rep["retention_days"]["source"] == "project"
+        assert rep["retention_days"]["value"] == 30
+        assert rep["disable_auto_learn"]["source"] == "user"
+        assert rep["quarantine_ingest"]["source"] == "org.defaults"
+
+    def test_unknown_keys_surface(self):
+        # A key the org sets that this client version doesn't know must still
+        # be visible to an auditor, not silently hidden.
+        p = Policy(enforce={"future_knob": "x"}, project={}, user={}, org_defaults={})
+        rep = p.explain()
+        assert rep["future_knob"] == {"value": "x", "source": "org.enforce", "locked": True}
+
+    def test_covers_all_builtin_keys(self):
+        rep = Policy(enforce={}, project={}, user={}, org_defaults={}).explain()
+        assert set(DEFAULTS).issubset(rep)

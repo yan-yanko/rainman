@@ -94,6 +94,37 @@ class Policy:
         """True if the org enforces this key (lower layers can't override)."""
         return key in self._enforce
 
+    def explain(self) -> Dict[str, Dict[str, Any]]:
+        """Effective value + provenance for every policy key.
+
+        The governance report behind ``rainman policy``: for each known key
+        (and any extra key present in a layer), which layer decided the
+        effective value and whether the org has locked it. Lets an admin or
+        auditor answer "what is this machine actually running under, and why"
+        without reading four files.
+        """
+        layers = (
+            ("org.enforce", self._enforce),
+            ("project", self._project),
+            ("user", self._user),
+            ("org.defaults", self._org_defaults),
+        )
+        keys = list(DEFAULTS)
+        for _, layer in layers:
+            for k in layer:
+                if k not in keys:
+                    keys.append(k)
+
+        report: Dict[str, Dict[str, Any]] = {}
+        for key in keys:
+            source, value = "builtin", DEFAULTS.get(key)
+            for name, layer in layers:
+                if key in layer:
+                    source, value = name, layer[key]
+                    break
+            report[key] = {"value": value, "source": source, "locked": self.locked(key)}
+        return report
+
 
 def load_policy(project_dir: Optional[str] = None,
                 global_dir: Optional[str] = None) -> Policy:

@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 325 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 340 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -69,7 +69,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (325 tests total, all marked `unit`)
+tests/                  (340 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -174,8 +174,11 @@ rainman setup                         # Register hooks + MCP for Claude Code + V
 rainman doctor                        # Self-diagnosis of installation health
 rainman review [approve|reject] <id>  # Review quarantined memories (Ph2c)
 rainman migrate --to sqlite|json      # Switch storage backend (Ph2a)
-rainman remote add <url> <ws> --token # Configure sync remote (Ph2b)
-rainman sync                          # Push + pull project memories (Ph2b)
+rainman remote add <url> <ws> --token # Configure team sync remote (Ph2b)
+rainman remote add ... --personal     # Personal remote: roam the GLOBAL layer across your machines
+rainman sync [--personal]             # Push + pull (team project layer, or personal global layer)
+rainman policy                        # Effective policy + which layer set each value (+ org locks)
+rainman audit verify [--path]         # Verify the tamper-evident audit hash chain (exit 1 if broken)
 rainman consolidate [--dry-run] [--no-forget]  # "Sleep" pass: promote recurring events -> generalizations + forget stale noise
 rainman reconsolidate <id> "new info" [--replace]  # Update a memory in place (labile-window integration; keeps revision history)
 rainman working                       # Show the working-memory set (what's in focus this session)
@@ -188,7 +191,11 @@ audit, encryption-at-rest, admin console, deploy/SOC2 docs). Here we only have
 the client half (`rainman/sync/client.py`, `rainman remote` / `rainman sync`).
 
 Client sync contract worth knowing:
-- Syncs the **project layer only** (global is personal/never leaves).
+- Team sync moves the **project layer only**. The global layer never joins a
+  team workspace; it can roam across YOUR OWN machines via the explicit opt-in
+  **personal remote** (`rainman remote add --personal` / `rainman sync
+  --personal`), whose state lives in `~/.rainman/personal_sync.json` — never
+  the repo, never mixed with team state.
 - Bearer token (or OIDC JWT) lives in `~/.rainman/sync_credentials.json` or
   `RAINMAN_SYNC_TOKEN` — **never** the git-committable `.rainman/sync_state.json`.
 - `sync` is **push-then-pull** (emit local tombstones before re-pulling, so a
@@ -227,14 +234,14 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 - **No data leaves the machine.** Zero external API calls, zero network traffic.
 - **Trust levels (`core/trust.py`):** every memory has a level (`user` > `hook` > `ingest`) derived from `source`. Memory poisoning defense is **gating, not ranking** (attacker controls keyword content): ingest is held out of unsolicited auto-injection by default; ingest gets no rehearsal/associative amplifiers; `quarantine_ingest` policy can withhold ingested memories until reviewed. A small visible quality prior (`trust_prior`) only nudges ranking.
 - **Provenance:** `Memory.author` records the actor; trust + source shown on every injection.
-- **Audit log (`core/audit.py`):** opt-in append-only JSONL of store/recall/forget/retention with actor + timestamp.
+- **Audit log (`core/audit.py`):** opt-in append-only JSONL of store/recall/forget/retention with actor + timestamp. Records are **hash-chained** (each carries `h` = SHA-256 of the previous hash + its canonical JSON), so in-place edits and mid-file deletions are detectable: `rainman audit verify` walks the chain, exits 1 on a break. Pre-chain records report as legacy, not failures. `rainman policy` prints the effective policy with per-key provenance (which layer set it, org locks).
 - **Policy plane (`core/config.py`):** `org.enforce > project > user > org.defaults > builtin`; `enforce` block = non-overridable org mandates.
 
 ## Hard Rules
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (325 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (340 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact. The ONLY exception is the **opt-in `rainman[semantic]` extra** (M7): the core stays zero-dep and runs pure-lexical; installing the extra adds a small CPU-only local embedding model (`model2vec`/potion-base-8M) that activates the dense lane via the `semantic_search` policy. It is never imported at core import time and `pip install rainman` pulls in nothing.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.

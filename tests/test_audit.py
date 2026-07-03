@@ -81,3 +81,76 @@ class TestAuditResilience:
         logger = AuditLogger(str(bad_parent / "audit.log"), enabled=True)
         logger.record("store", actor="bob", memory_ids=["m1"])
         logger.flush()  # must not raise
+
+
+@pytest.mark.unit
+class TestAuditChain:
+    """Tamper-evident hash chain (governance): every record links to the
+    previous one; editing or removing a mid-file record breaks verification."""
+
+    def _log_some(self, path, events, enabled=True):
+        logger = AuditLogger(path, enabled=enabled, buffer_limit=100)
+        for e in events:
+            logger.record(e, actor="alice", memory_ids=["m1"])
+        logger.flush()
+        return logger
+
+    def test_records_are_chained(self, tmp_path):
+        from rainman.core.audit import _link_hash
+        path = str(tmp_path / "audit.jsonl")
+        self._log_some(path, ["store", "recall", "forget"])
+        recs = _read_log(path)
+        assert all("h" in r for r in recs)
+        prev = ""
+        for r in recs:
+            assert r["h"] == _link_hash(prev, r)
+            prev = r["h"]
+
+    def test_chain_continues_across_logger_instances(self, tmp_path):
+        from rainman.core.audit import verify_chain
+        path = str(tmp_path / "audit.jsonl")
+        self._log_some(path, ["store"])
+        self._log_some(path, ["recall"])  # new process, chain resumes from disk
+        result = verify_chain(path)
+        assert result["ok"] and result["hashed"] == 2 and result["legacy"] == 0
+
+    def test_verify_detects_edited_record(self, tmp_path):
+        from rainman.core.audit import verify_chain
+        path = str(tmp_path / "audit.jsonl")
+        self._log_some(path, ["store", "recall", "forget"])
+        lines = open(path, encoding="utf-8").read().splitlines()
+        doctored = json.loads(lines[1])
+        doctored["actor"] = "mallory"  # rewrite history
+        lines[1] = json.dumps(doctored, ensure_ascii=False)
+        open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+
+        result = verify_chain(path)
+        assert result["ok"] is False
+        assert result["first_bad_line"] == 2
+
+    def test_verify_detects_deleted_record(self, tmp_path):
+        from rainman.core.audit import verify_chain
+        path = str(tmp_path / "audit.jsonl")
+        self._log_some(path, ["store", "recall", "forget"])
+        lines = open(path, encoding="utf-8").read().splitlines()
+        del lines[1]  # drop a mid-file record
+        open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+
+        result = verify_chain(path)
+        assert result["ok"] is False
+
+    def test_legacy_records_tolerated(self, tmp_path):
+        from rainman.core.audit import verify_chain
+        path = str(tmp_path / "audit.jsonl")
+        # Pre-chain file written by an older version (no "h").
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": 1.0, "event": "store", "actor": "old"}) + "\n")
+        self._log_some(path, ["recall"])
+        result = verify_chain(path)
+        assert result["ok"] is True
+        assert result["legacy"] == 1 and result["hashed"] == 1
+
+    def test_missing_file_is_clean(self, tmp_path):
+        from rainman.core.audit import verify_chain
+        result = verify_chain(str(tmp_path / "nope.jsonl"))
+        assert result["ok"] is True and result.get("missing") is True
