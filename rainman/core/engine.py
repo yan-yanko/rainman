@@ -503,7 +503,12 @@ class RainmanEngine:
             f.replace("\\", "/").split("/")[-1].lower()
             for f in (context_files or [])
         }
-        error_terms = set(tokenize(error_signature)) if error_signature else set()
+        # Digit-only tokens (line numbers, sizes, exit codes) are stack-trace
+        # noise — a memory must never match an error because both contain "2".
+        error_terms = (
+            {t for t in tokenize(error_signature) if not t.isdigit()}
+            if error_signature else set()
+        )
 
         # Optional semantic lane (M7): dense similarity of the query to each
         # candidate, if a local embedding provider is available. Empty dict when
@@ -1001,7 +1006,12 @@ class RainmanEngine:
             if isinstance(exp, dict) and exp.get("problem"):
                 entry_terms |= set(tokenize(exp["problem"]))
             matched = error_terms & entry_terms
-            if matched:
+            # One shared token out of a long signature is a lexical
+            # coincidence, not a recurrence — and any nonzero affinity passes
+            # the relevance floor. Require at least two matched terms (or the
+            # entire signature, when it is that short) before the error
+            # contributes affinity.
+            if len(matched) >= 2 or (matched and matched == error_terms):
                 total_w = sum(idf.get(t, 1.0) for t in error_terms) or 1.0
                 matched_w = sum(idf.get(t, 1.0) for t in matched)
                 score += 0.6 * (matched_w / total_w)

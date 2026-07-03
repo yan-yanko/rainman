@@ -300,3 +300,53 @@ one.
 - **Agent-required, not CI.** Producing a fresh run needs an LLM agent, so this
   is excluded from the unit suite. Only the deterministic parts (recall
   contexts, grading a recorded run) run without a model.
+
+## Companion: `lazy_notes_bench.py` — the notes a REAL human keeps
+
+The sequential bench's tie assumed a **diligent** human: every learning,
+including every routine failure→fix pair, written to the notes file. Real
+humans write up the outage postmortem and the architecture decision — not the
+Tuesday-afternoon flaky-test fix. Rainman's hooks capture exactly that
+undramatic tail with zero discipline. This bench measures what the coverage
+asymmetry is worth, **deterministically — no LLM**:
+
+12 incidents (4 notable, 8 routine), each error later *recurs* (varied text).
+The notes arm greps a small, curated, noise-free file holding the notable
+write-ups plus a swept fraction of the routine fixes. The Rainman arm stores
+every incident through the hook's real API (`record_failure`→`resolve_failure`)
+**plus 60 auto-learn noise cards** (auto-capture stores junk too — its store is
+bigger and dirtier), then recalls with *no query at all*:
+`recall("", context_files=[...], error_signature=...)`.
+
+Result (`python eval/local_demo/lazy_notes_bench.py`):
+
+```
+human diligence on routine fixes      coverage  grep notes  given-coverage
+     0% ( 4 notes on file)                33%        25%         75%
+    33% ( 7 notes on file)                58%        50%         86%
+    67% ( 9 notes on file)                75%        67%         89%
+   100% (12 notes on file)               100%        92%         92%
+Rainman (auto-learn, error-conditioned)  100%       100%   (mean rank 1.0)
+```
+
+The decomposition is the point: **end-to-end = coverage × retrieval**. Grep's
+retrieval-given-coverage is strong (75–92%) — its ceiling is *what the human
+wrote down*. At 100% diligence the two arms effectively tie again, consistent
+with the sequential bench. The advantage is not the ranking math; it is that
+**nobody writes the notes**, and the hooks do. Holds at `--noise 200`.
+
+**Controls found a real bug.** The two never-seen control errors initially
+surfaced results on BOTH arms: grep matched the word "get" ("unable to **get**
+local issuer" → "**GET** /orders"), and Rainman's relevance floor let a novel
+error ride a *single* coincidental token — even a bare digit ("8.2 GiB" vs
+"datetime(2026, …, 2, 30)") — into the results. The core fix (error affinity
+ignores digit-only tokens and requires ≥2 matched terms, or the entire short
+signature) is guarded by `tests/test_regressions.py::TestErrorAffinityFloorLeak`;
+the bench itself is smoke-gated in `tests/test_eval.py::TestLazyNotesBench`.
+
+Honest caveats: synthetic, small-N. Rainman's 100% coverage is **conditional on
+the hook capturing** (the pairing mechanism is unit-tested in
+`test_experience.py`, but real transcripts can miss). And mechanical grep
+understates a human *re-reading* a small notes file — though no amount of
+re-reading recovers a note that was never written, which is the variable under
+test. Captured artifact: `lazy_notes_run.json`.
