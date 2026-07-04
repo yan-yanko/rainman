@@ -46,7 +46,7 @@ jobs:
         run: |
           python -m pip install cyclonedx-bom
           # Rainman has zero runtime deps; the SBOM documents exactly that.
-          cyclonedx-py environment --output-format JSON --outfile sbom.cdx.json
+          cyclonedx-py environment --output-format JSON --output-file sbom.cdx.json
 
       - name: Sign artifacts with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
