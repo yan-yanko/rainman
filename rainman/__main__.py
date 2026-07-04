@@ -79,14 +79,27 @@ def main():
     p_migrate.add_argument("--to", required=True, choices=["json", "sqlite"], help="Target backend")
 
     # remote
-    p_remote = sub.add_parser("remote", help="Configure the sync remote for this project")
+    p_remote = sub.add_parser("remote", help="Configure the sync remote (team or --personal)")
     p_remote.add_argument("action", choices=["add", "show"])
     p_remote.add_argument("url", nargs="?", help="Sync server URL (for add)")
     p_remote.add_argument("workspace", nargs="?", help="Workspace id (for add)")
     p_remote.add_argument("--token", help="Per-seat bearer token (stored outside the repo)")
+    p_remote.add_argument("--personal", action="store_true",
+                          help="Personal remote: roam your GLOBAL layer across "
+                               "your own machines (state in ~/.rainman, never the repo)")
 
     # sync
-    sub.add_parser("sync", help="Pull + push project memories with the sync server")
+    p_sync = sub.add_parser("sync", help="Pull + push memories with the sync server")
+    p_sync.add_argument("--personal", action="store_true",
+                        help="Sync the personal (global-layer) remote instead of the team one")
+
+    # policy
+    sub.add_parser("policy", help="Show the effective policy and which layer set each value")
+
+    # audit
+    p_audit = sub.add_parser("audit", help="Audit log tools (verify the tamper-evident chain)")
+    p_audit.add_argument("action", choices=["verify"])
+    p_audit.add_argument("--path", help="Audit log path (default: this project's audit log)")
 
     # review
     p_review = sub.add_parser("review", help="Review quarantined memories (list/approve/reject)")
@@ -140,7 +153,7 @@ def main():
         cmd_links, cmd_export, cmd_context, cmd_ingest,
         cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
         cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit, cmd_consolidate,
-        cmd_reconsolidate, cmd_working,
+        cmd_reconsolidate, cmd_working, cmd_policy, cmd_audit,
     )
 
     if args.command == "init":
@@ -170,9 +183,14 @@ def main():
     elif args.command == "migrate":
         cmd_migrate(to=args.to)
     elif args.command == "remote":
-        cmd_remote(action=args.action, url=args.url, workspace=args.workspace, token=args.token)
+        cmd_remote(action=args.action, url=args.url, workspace=args.workspace,
+                   token=args.token, personal=args.personal)
     elif args.command == "sync":
-        cmd_sync()
+        cmd_sync(personal=args.personal)
+    elif args.command == "policy":
+        cmd_policy()
+    elif args.command == "audit":
+        cmd_audit(action=args.action, path=args.path)
     elif args.command == "review":
         cmd_review(action=args.action, memory_id=args.memory_id)
     elif args.command == "setup":

@@ -391,3 +391,59 @@ class TestReverseIndex:
         index = build_reverse_link_index([m1, m2])
         score = associative_score("b", [m1, m2], ["a"], reverse_index=index)
         assert score == 0.0  # No link = no boost
+
+
+# ── Error-affinity floor leak (found by eval/local_demo/lazy_notes_bench.py) ──
+
+
+@pytest.mark.unit
+class TestErrorAffinityFloorLeak:
+    """A NOVEL error must not surface memories via a coincidental token.
+
+    Any nonzero task_affinity passes the relevance floor, so before the fix a
+    never-seen error could ride a single shared token — even a bare digit like
+    "2" — into the agent's context. Error affinity now ignores digit-only
+    tokens and requires >= 2 matched terms (or the entire, short signature).
+    """
+
+    def test_shared_digit_does_not_surface(self, engine):
+        engine.record_failure(
+            "AssertionError in test_rollover: assert t == datetime(2026, 3, 29, 2, 30)",
+            file_refs=["tests/test_billing.py"],
+        )
+        results = engine.recall(
+            "", error_signature="MemoryError: unable to allocate 8 GiB for shape (2, 1024)",
+        )
+        assert results == []
+
+    def test_single_stem_collision_does_not_surface(self, engine):
+        engine.record_failure(
+            "ModuleNotFoundError: No module named app.newmod inside the container but not locally",
+            file_refs=["Dockerfile"],
+        )
+        # Shares only the stem "local" (locally/local) with the stored card.
+        results = engine.recall(
+            "", error_signature="ssl.SSLCertVerificationError: certificate verify "
+                                "failed: unable to get local issuer certificate",
+        )
+        assert results == []
+
+    def test_true_recurrence_still_surfaces(self, engine):
+        failure = engine.record_failure(
+            "sqlalchemy TimeoutError: QueuePool limit of size 5 reached, connection timed out",
+            file_refs=["app/db.py"],
+        )
+        results = engine.recall(
+            "", error_signature="sqlalchemy TimeoutError: QueuePool limit reached, "
+                                "connection timed out (worker 3)",
+        )
+        assert failure.id in [r.memory.id for r in results]
+        assert results[0].task_affinity > 0.0
+
+    def test_short_signature_full_match_still_counts(self, engine):
+        failure = engine.record_failure(
+            "worker crashed with a segfault under load", file_refs=["app/worker.py"],
+        )
+        # One-term signature, fully matched: still legitimate task state.
+        results = engine.recall("", error_signature="segfault")
+        assert failure.id in [r.memory.id for r in results]

@@ -184,22 +184,24 @@ def cmd_migrate(to: str, project_dir: Optional[str] = None) -> None:
 
 
 def cmd_remote(action: str, url: Optional[str] = None,
-               workspace: Optional[str] = None, token: Optional[str] = None) -> None:
-    """Configure the sync remote for this project."""
+               workspace: Optional[str] = None, token: Optional[str] = None,
+               personal: bool = False) -> None:
+    """Configure the sync remote (team by default, --personal for the global layer)."""
     from rainman.sync import SyncClient, SyncError
     engine = _get_engine()
     try:
-        client = SyncClient(engine)
+        client = SyncClient(engine, personal=personal)
     except SyncError as e:
         print(f"Error: {e}")
         sys.exit(1)
 
+    kind = "personal (global layer)" if personal else "team (project layer)"
     if action == "add":
         if not url or not workspace:
-            print("Usage: rainman remote add <url> <workspace> [--token <token>]")
+            print("Usage: rainman remote add <url> <workspace> [--token <token>] [--personal]")
             sys.exit(1)
         client.configure(remote=url, workspace=workspace, token=token)
-        print(f"Remote set: {url} (workspace: {workspace})")
+        print(f"Remote set [{kind}]: {url} (workspace: {workspace})")
         if token:
             print("Token stored in ~/.rainman/sync_credentials.json (not in the repo).")
         else:
@@ -207,25 +209,63 @@ def cmd_remote(action: str, url: Optional[str] = None,
     elif action == "show":
         d = client.describe()
         if not d["remote"]:
-            print("No remote configured.")
+            print(f"No {kind} remote configured.")
             return
-        print(f"Remote:    {d['remote']}")
+        print(f"Remote:    {d['remote']}  [{kind}]")
         print(f"Workspace: {d['workspace']}")
         print(f"Cursor:    {d['last_pull_seq']}")
         print(f"Token:     {'present' if d['token_present'] else 'missing'}")
 
 
-def cmd_sync() -> None:
+def cmd_sync(personal: bool = False) -> None:
     """Pull remote changes then push local ones."""
     from rainman.sync import SyncClient, SyncError
     engine = _get_engine()
     try:
-        result = SyncClient(engine).sync()
+        result = SyncClient(engine, personal=personal).sync()
     except SyncError as e:
         print(f"Sync failed: {e}")
         sys.exit(1)
-    print(f"Synced: pulled {result['pulled']}, pushed {result['pushed']}, "
+    what = "personal" if personal else "team"
+    print(f"Synced [{what}]: pulled {result['pulled']}, pushed {result['pushed']}, "
           f"deleted {result['deleted']}")
+
+
+def cmd_policy() -> None:
+    """Print the effective policy and where each value comes from."""
+    engine = _get_engine()
+    report = engine.policy.explain()
+    key_w = max(len(k) for k in report)
+    val_w = max(len(json.dumps(v["value"])) for v in report.values())
+    print(f"{'key':<{key_w}}  {'value':<{val_w}}  source")
+    print("-" * (key_w + val_w + 20))
+    for key, info in report.items():
+        lock = "  [LOCKED by org]" if info["locked"] else ""
+        print(f"{key:<{key_w}}  {json.dumps(info['value']):<{val_w}}  {info['source']}{lock}")
+
+
+def cmd_audit(action: str, path: Optional[str] = None) -> None:
+    """Audit log tools. `verify` checks the tamper-evident hash chain."""
+    from rainman.core.audit import verify_chain
+    if action != "verify":
+        print("Usage: rainman audit verify [--path <audit.jsonl>]")
+        sys.exit(1)
+    if path is None:
+        engine = _get_engine()
+        path = engine.store.audit_path()
+    result = verify_chain(path)
+    if result.get("missing"):
+        print(f"No audit log at {path} (enable with policy 'audit' or RAINMAN_AUDIT=1).")
+        return
+    print(f"Audit log: {result['path']}")
+    print(f"Records:   {result['total']} ({result['hashed']} chained, "
+          f"{result['legacy']} legacy pre-chain)")
+    if result["ok"]:
+        print("Chain:     OK — no tampering detected")
+    else:
+        print(f"Chain:     BROKEN at line {result['first_bad_line']} — "
+              f"records from this point cannot be trusted")
+        sys.exit(1)
 
 
 def cmd_review(action: Optional[str] = None, memory_id: Optional[str] = None) -> None:

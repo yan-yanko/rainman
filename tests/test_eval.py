@@ -180,3 +180,41 @@ class TestSequentialBench:
         # At scale: Rainman holds the whole chain; grep falls behind it.
         assert scaled["resolved"]["rainman"] == small["n"]
         assert scaled["resolved"]["rainman"] > scaled["resolved"]["file"]
+
+
+@pytest.mark.unit
+class TestLazyNotesBench:
+    """Smoke-gate for eval/local_demo/lazy_notes_bench.py: the coverage claim
+    must hold and the controls must stay clean (the bench found a real floor
+    leak once — keep it honest)."""
+
+    @staticmethod
+    def _load():
+        import importlib.util
+        path = os.path.join(os.path.dirname(__file__), "..",
+                            "eval", "local_demo", "lazy_notes_bench.py")
+        spec = importlib.util.spec_from_file_location("lazy_notes_bench", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_bench_runs_and_controls_are_clean(self):
+        bench = self._load()
+        report = bench.run(noise=20, diligence_sweep=[0.0, 1.0], k=5)
+
+        # Controls: a never-seen error surfaces nothing on either arm.
+        assert all(c["clean"] for c in report["rainman"]["controls"])
+        for cell in report["notes_cells"]:
+            assert all(c["clean"] for c in cell["controls"])
+
+        # Coverage arithmetic: at zero diligence only notable notes exist.
+        zero = report["notes_cells"][0]
+        assert zero["coverage"] == pytest.approx(
+            report["notable"] / report["incidents"])
+        # Grep can never hit more than the human wrote down.
+        for cell in report["notes_cells"]:
+            assert cell["end_to_end"] <= cell["coverage"] + 1e-9
+
+        # The auto-learn arm must beat the lazy-notes ceiling comfortably.
+        assert report["rainman"]["end_to_end"] >= 0.75
+        assert report["rainman"]["end_to_end"] >= zero["end_to_end"]

@@ -22,10 +22,25 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Run the unit suite (publish gate)
+        run: |
+          python -m pip install -e . pytest
+          pytest tests/ -m unit -q
+
       - name: Build sdist + wheel
         run: |
           python -m pip install --upgrade build
           python -m build
+
+      # Stash the clean dist BEFORE signing — PyPI must receive only the
+      # .whl/.tar.gz, not the .sigstore bundles added below.
+      - name: Stash dist for PyPI
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
 
       - name: Generate CycloneDX SBOM
         run: |
@@ -47,3 +62,22 @@ jobs:
             dist/*.sigstore*
             sbom.cdx.json
           generate_release_notes: true
+
+  # PyPI via Trusted Publishing (OIDC) — no API token stored anywhere.
+  # One-time setup on pypi.org: Account -> Publishing -> add pending publisher
+  #   project: rainman-memory / owner: yan-yanko / repo: rainman
+  #   workflow: release.yml / environment: pypi
+  publish-pypi:
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rainman-memory
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -36,7 +36,10 @@ The module that was "unfindable" now surfaces as the #1 result in every relevant
 ## Quick Start
 
 ```bash
-# Install from GitHub (no PyPI needed)
+# Install (PyPI package: rainman-memory; the CLI and import stay `rainman`)
+pip install rainman-memory
+
+# ...or straight from GitHub
 pip install git+https://github.com/yan-yanko/rainman.git
 
 # Initialize in your project

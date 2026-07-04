@@ -2,14 +2,21 @@
 Sync client
 ===========
 
-Pushes/pulls a repo's PROJECT-layer memories to a self-hosted sync server,
-using the monotonic-cursor delta protocol. Stdlib only (``urllib``).
+Pushes/pulls memories to a self-hosted sync server using the monotonic-cursor
+delta protocol. Stdlib only (``urllib``). Two modes:
 
-State split for security:
-  * ``<project>/.rainman/sync_state.json`` — remote URL, workspace, cursor,
-    and per-id content hashes. Safe to commit; contains no secret.
-  * the bearer token comes from ``RAINMAN_SYNC_TOKEN`` or
-    ``~/.rainman/sync_credentials.json`` ({remote_url: token}) — NEVER the repo.
+  * team (default)     — the repo's PROJECT-layer memories, shared with the
+                         team workspace. State in
+                         ``<project>/.rainman/sync_state.json`` (committable;
+                         contains no secret).
+  * personal (opt-in)  — the GLOBAL layer (your personal cross-project
+                         memory), roamed across your own machines via a
+                         personal workspace. State in
+                         ``~/.rainman/personal_sync.json`` — never the repo,
+                         and never mixed with a team workspace.
+
+The bearer token comes from ``RAINMAN_SYNC_TOKEN`` or
+``~/.rainman/sync_credentials.json`` ({remote_url: token}) — NEVER the repo.
 
 Conflict resolution is last-write-to-server-wins by server ``seq``; the local
 audit log preserves history. Pulled memories overwrite local copies (including
@@ -44,12 +51,18 @@ def _content_hash(data: dict) -> str:
 
 
 class SyncClient:
-    def __init__(self, engine):
+    def __init__(self, engine, personal: bool = False):
         self.engine = engine
-        proj = engine.store._project_dir
-        if not proj:
-            raise SyncError("sync requires a project (.rainman/) directory")
-        self._state_path = os.path.join(proj, "sync_state.json")
+        self.personal = personal
+        self._layer = "global" if personal else "project"
+        if personal:
+            # Personal memory roams via ~/.rainman — nothing touches the repo.
+            self._state_path = os.path.join(engine.store.global_dir(), "personal_sync.json")
+        else:
+            proj = engine.store._project_dir
+            if not proj:
+                raise SyncError("team sync requires a project (.rainman/) directory")
+            self._state_path = os.path.join(proj, "sync_state.json")
         self._creds_path = os.path.join(engine.store.global_dir(), "sync_credentials.json")
 
     # ── Config / state ───────────────────────────────────────────
@@ -138,7 +151,9 @@ class SyncClient:
         state = self._load_state()
         remote, ws = state.get("remote"), state.get("workspace")
         if not remote or not ws:
-            raise SyncError("no remote configured — run `rainman remote add <url> <workspace>`")
+            flag = " --personal" if self.personal else ""
+            raise SyncError(
+                f"no remote configured — run `rainman remote add <url> <workspace>{flag}`")
         token = self._token(remote)
         if not token:
             raise SyncError("no token — set RAINMAN_SYNC_TOKEN or pass --token to `rainman remote add`")
@@ -173,7 +188,7 @@ class SyncClient:
                     applied += 1
             elif ch.get("data"):
                 m = Memory.from_dict(ch["data"])
-                m.layer = "project"
+                m.layer = self._layer
                 by_id[m.id] = m
                 pushed[mid] = _content_hash(ch["data"])
                 applied += 1
@@ -184,7 +199,7 @@ class SyncClient:
     def push(self) -> dict:
         state, remote, ws, token = self._ready()
         pushed: Dict[str, str] = state.get("pushed", {})
-        local = [m for m in self.engine.store.load_all() if m.layer == "project"]
+        local = [m for m in self.engine.store.load_all() if m.layer == self._layer]
 
         changed, local_ids = [], set()
         for m in local:

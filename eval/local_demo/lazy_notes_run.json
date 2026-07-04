@@ -1,0 +1,644 @@
+{
+  "k": 5,
+  "noise": 60,
+  "incidents": 12,
+  "notable": 4,
+  "rainman_store_size": 87,
+  "rainman": {
+    "end_to_end": 1.0,
+    "mean_rank_of_fix": 1.0,
+    "rows": [
+      {
+        "incident": "pool",
+        "notable": true,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640800_699021",
+          "rm_1783058640805_7d077b",
+          "rm_1783058641454_da052f",
+          "rm_1783058641352_0fdcbf",
+          "rm_1783058641252_b708b3"
+        ]
+      },
+      {
+        "incident": "jwt",
+        "notable": true,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640818_d95c9e",
+          "rm_1783058640821_16abba",
+          "rm_1783058641442_f6dcb7",
+          "rm_1783058641342_63c81f",
+          "rm_1783058641243_4b3b83"
+        ]
+      },
+      {
+        "incident": "webhook",
+        "notable": true,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640834_b01542",
+          "rm_1783058640838_0ad8e0",
+          "rm_1783058641544_151b4d",
+          "rm_1783058641431_28c6db",
+          "rm_1783058641332_dacb1a"
+        ]
+      },
+      {
+        "incident": "migrate",
+        "notable": true,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640852_60c816",
+          "rm_1783058640856_638181",
+          "rm_1783058640867_489583",
+          "rm_1783058640920_922a37",
+          "rm_1783058640942_fa0636"
+        ]
+      },
+      {
+        "incident": "dst",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640876_f53619",
+          "rm_1783058640871_0d6995",
+          "rm_1783058641521_e54256",
+          "rm_1783058641409_a4a84a",
+          "rm_1783058641311_1b076c"
+        ]
+      },
+      {
+        "incident": "cursor",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640887_438fe0",
+          "rm_1783058640891_baf407",
+          "rm_1783058640942_fa0636"
+        ]
+      },
+      {
+        "incident": "charmap",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640903_f2298e",
+          "rm_1783058640907_cdc55f"
+        ]
+      },
+      {
+        "incident": "lockheld",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640920_922a37",
+          "rm_1783058640924_8477f9",
+          "rm_1783058640867_489583",
+          "rm_1783058640856_638181",
+          "rm_1783058640852_60c816"
+        ]
+      },
+      {
+        "incident": "nplus1",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640942_fa0636",
+          "rm_1783058640937_ad4b40",
+          "rm_1783058641476_43251f",
+          "rm_1783058641368_98460e",
+          "rm_1783058641271_fd07b9"
+        ]
+      },
+      {
+        "incident": "cienv",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640955_18fa85",
+          "rm_1783058640960_5c61ef"
+        ]
+      },
+      {
+        "incident": "cachedt",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640973_25a3ff",
+          "rm_1783058640978_053081",
+          "rm_1783058641510_84043c",
+          "rm_1783058641399_f5f12a",
+          "rm_1783058641302_9c2a23"
+        ]
+      },
+      {
+        "incident": "dockercopy",
+        "notable": false,
+        "hit": true,
+        "rank": 1,
+        "ids": [
+          "rm_1783058640991_cf180f",
+          "rm_1783058640997_0b7004"
+        ]
+      }
+    ],
+    "controls": [
+      {
+        "control": "ctrl_mem",
+        "surfaced": 0,
+        "clean": true,
+        "ids": []
+      },
+      {
+        "control": "ctrl_ssl",
+        "surfaced": 0,
+        "clean": true,
+        "ids": []
+      }
+    ]
+  },
+  "notes_cells": [
+    {
+      "diligence": 0.0,
+      "notes_kept": 4,
+      "coverage": 0.3333333333333333,
+      "end_to_end": 0.25,
+      "retrieval_given_coverage": 0.75,
+      "rows": [
+        {
+          "incident": "pool",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "pool"
+          ]
+        },
+        {
+          "incident": "jwt",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "jwt"
+          ]
+        },
+        {
+          "incident": "webhook",
+          "recorded": true,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "migrate",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "migrate"
+          ]
+        },
+        {
+          "incident": "dst",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "cursor",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "charmap",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "migrate"
+          ]
+        },
+        {
+          "incident": "lockheld",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "migrate"
+          ]
+        },
+        {
+          "incident": "nplus1",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "cienv",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "cachedt",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "webhook"
+          ]
+        },
+        {
+          "incident": "dockercopy",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        }
+      ],
+      "controls": [
+        {
+          "control": "ctrl_mem",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        },
+        {
+          "control": "ctrl_ssl",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        }
+      ]
+    },
+    {
+      "diligence": 0.3333333333333333,
+      "notes_kept": 7,
+      "coverage": 0.5833333333333334,
+      "end_to_end": 0.5,
+      "retrieval_given_coverage": 0.8571428571428571,
+      "rows": [
+        {
+          "incident": "pool",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "pool"
+          ]
+        },
+        {
+          "incident": "jwt",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "jwt"
+          ]
+        },
+        {
+          "incident": "webhook",
+          "recorded": true,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "migrate",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "migrate",
+            "charmap"
+          ]
+        },
+        {
+          "incident": "dst",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "dst"
+          ]
+        },
+        {
+          "incident": "cursor",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cursor"
+          ]
+        },
+        {
+          "incident": "charmap",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "charmap",
+            "migrate"
+          ]
+        },
+        {
+          "incident": "lockheld",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "migrate"
+          ]
+        },
+        {
+          "incident": "nplus1",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "cienv",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "cursor"
+          ]
+        },
+        {
+          "incident": "cachedt",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "webhook"
+          ]
+        },
+        {
+          "incident": "dockercopy",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        }
+      ],
+      "controls": [
+        {
+          "control": "ctrl_mem",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        },
+        {
+          "control": "ctrl_ssl",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        }
+      ]
+    },
+    {
+      "diligence": 0.6666666666666666,
+      "notes_kept": 9,
+      "coverage": 0.75,
+      "end_to_end": 0.6666666666666666,
+      "retrieval_given_coverage": 0.8888888888888888,
+      "rows": [
+        {
+          "incident": "pool",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "pool"
+          ]
+        },
+        {
+          "incident": "jwt",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "jwt"
+          ]
+        },
+        {
+          "incident": "webhook",
+          "recorded": true,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "migrate",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "migrate",
+            "lockheld",
+            "charmap"
+          ]
+        },
+        {
+          "incident": "dst",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "dst"
+          ]
+        },
+        {
+          "incident": "cursor",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cursor",
+            "nplus1"
+          ]
+        },
+        {
+          "incident": "charmap",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "charmap",
+            "migrate"
+          ]
+        },
+        {
+          "incident": "lockheld",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "lockheld",
+            "migrate"
+          ]
+        },
+        {
+          "incident": "nplus1",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "nplus1"
+          ]
+        },
+        {
+          "incident": "cienv",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "cursor"
+          ]
+        },
+        {
+          "incident": "cachedt",
+          "recorded": false,
+          "hit": false,
+          "ids": [
+            "webhook"
+          ]
+        },
+        {
+          "incident": "dockercopy",
+          "recorded": false,
+          "hit": false,
+          "ids": []
+        }
+      ],
+      "controls": [
+        {
+          "control": "ctrl_mem",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        },
+        {
+          "control": "ctrl_ssl",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        }
+      ]
+    },
+    {
+      "diligence": 1.0,
+      "notes_kept": 12,
+      "coverage": 1.0,
+      "end_to_end": 0.9166666666666666,
+      "retrieval_given_coverage": 0.9166666666666666,
+      "rows": [
+        {
+          "incident": "pool",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "pool"
+          ]
+        },
+        {
+          "incident": "jwt",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "jwt",
+            "cachedt"
+          ]
+        },
+        {
+          "incident": "webhook",
+          "recorded": true,
+          "hit": false,
+          "ids": []
+        },
+        {
+          "incident": "migrate",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "migrate",
+            "lockheld",
+            "charmap"
+          ]
+        },
+        {
+          "incident": "dst",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "dst"
+          ]
+        },
+        {
+          "incident": "cursor",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cursor",
+            "nplus1"
+          ]
+        },
+        {
+          "incident": "charmap",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cachedt",
+            "charmap",
+            "migrate"
+          ]
+        },
+        {
+          "incident": "lockheld",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "lockheld",
+            "dockercopy",
+            "cachedt",
+            "migrate"
+          ]
+        },
+        {
+          "incident": "nplus1",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "nplus1"
+          ]
+        },
+        {
+          "incident": "cienv",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cienv",
+            "cursor"
+          ]
+        },
+        {
+          "incident": "cachedt",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "cachedt",
+            "webhook"
+          ]
+        },
+        {
+          "incident": "dockercopy",
+          "recorded": true,
+          "hit": true,
+          "ids": [
+            "dockercopy"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "control": "ctrl_mem",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        },
+        {
+          "control": "ctrl_ssl",
+          "surfaced": 0,
+          "clean": true,
+          "ids": []
+        }
+      ]
+    }
+  ]
+}
