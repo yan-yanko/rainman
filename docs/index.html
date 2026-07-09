@@ -1,15 +1,942 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rainman — AI Coding Memory That Never Forgets</title>
-    <meta name="description" content="Persistent memory layer for AI coding tools. Set up once, remember forever. Zero LLM calls. Runs locally. Zero dependencies." />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
-    <script type="module" crossorigin src="/rainman/assets/index-Br4kXkmQ.js"></script>
-    <link rel="stylesheet" crossorigin href="/rainman/assets/index-C-ejvMF9.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Rainman is project memory for AI coding agents. It remembers every failure, fix and decision your agent makes — and recalls the right one the moment the same problem returns. Zero LLM calls, zero dependencies, runs local. Free and open-source." />
+<meta property="og:title" content="Rainman — your agent never solves the same bug twice" />
+<meta property="og:description" content="Project memory for AI coding agents. Remembers what failed, what fixed it, what your team decided — and surfaces it when the same problem returns. Zero LLM calls. Runs local. Free & open-source." />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+<title>Rainman — the problem with your agent’s memory is you</title>
+<style>
+  /* ── tokens: a lucid lab notebook. Light = ink on cool paper (Cajal),
+       dark = the same neuron, bioluminescent. Theme via tokens only. ── */
+  :root {
+    --paper: #f2f5f9;
+    --paper-2: #e9edf4;
+    --grid: rgba(27, 34, 55, 0.055);
+    --ink: #1b2237;
+    --ink-2: #454e6b;
+    --muted: #838ba3;
+    --hairline: rgba(27, 34, 55, 0.14);
+    --neural: #3b4a8c;        /* the drawing ink */
+    --neural-soft: rgba(59, 74, 140, 0.35);
+    --signal: #d97706;        /* bioelectric amber — firing only */
+    --signal-soft: rgba(217, 119, 6, 0.14);
+    --redink: #b3261e;        /* red pen for exceptions */
+    --blueink: #1d4ed8;       /* ballpoint — the human's entries */
+    --card: #ffffff;
+    --terminal: #171c2b;      /* code lives in the dark, floats on paper */
+    --terminal-ink: #dde3f2;
+    --terminal-dim: #8d96b0;
+    --chart-a: #047857;       /* rainman series (validated on paper) */
+    --chart-b: #1d4ed8;       /* your-notes series */
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10141f; --paper-2: #141927;
+      --grid: rgba(190, 202, 235, 0.05);
+      --ink: #e7eaf4; --ink-2: #aab2c9; --muted: #6d7690;
+      --hairline: rgba(190, 202, 235, 0.16);
+      --neural: #8b9be0; --neural-soft: rgba(139, 155, 224, 0.35);
+      --signal: #f59e0b; --signal-soft: rgba(245, 158, 11, 0.13);
+      --redink: #f08c86; --blueink: #7ea4f8;
+      --card: #171c2b;
+      --terminal: #0c0f18; --terminal-ink: #dde3f2; --terminal-dim: #8d96b0;
+      --chart-a: #059669; --chart-b: #3b82f6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10141f; --paper-2: #141927;
+    --grid: rgba(190, 202, 235, 0.05);
+    --ink: #e7eaf4; --ink-2: #aab2c9; --muted: #6d7690;
+    --hairline: rgba(190, 202, 235, 0.16);
+    --neural: #8b9be0; --neural-soft: rgba(139, 155, 224, 0.35);
+    --signal: #f59e0b; --signal-soft: rgba(245, 158, 11, 0.13);
+    --redink: #f08c86; --blueink: #7ea4f8;
+    --card: #171c2b;
+    --terminal: #0c0f18; --terminal-ink: #dde3f2; --terminal-dim: #8d96b0;
+    --chart-a: #059669; --chart-b: #3b82f6;
+  }
+  :root[data-theme="light"] {
+    --paper: #f2f5f9; --paper-2: #e9edf4;
+    --grid: rgba(27, 34, 55, 0.055);
+    --ink: #1b2237; --ink-2: #454e6b; --muted: #838ba3;
+    --hairline: rgba(27, 34, 55, 0.14);
+    --neural: #3b4a8c; --neural-soft: rgba(59, 74, 140, 0.35);
+    --signal: #d97706; --signal-soft: rgba(217, 119, 6, 0.14);
+    --redink: #b3261e; --blueink: #1d4ed8;
+    --card: #ffffff;
+    --terminal: #171c2b; --terminal-ink: #dde3f2; --terminal-dim: #8d96b0;
+    --chart-a: #047857; --chart-b: #1d4ed8;
+  }
+
+  html { background: var(--paper); scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; color: var(--ink); font-family: var(--sans); line-height: 1.65;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+      var(--paper);
+    background-size: 28px 28px, 28px 28px, auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blueink); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 4px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── nav ── */
+  nav { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 0; }
+  .brand { font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 21px; color: var(--ink); }
+  .brand em { color: var(--signal); font-style: normal; }
+  .navlinks { display: flex; gap: 26px; font-size: 14px; }
+  .navlinks a { color: var(--ink-2); }
+  .navlinks a:hover { color: var(--ink); }
+
+  /* ── hero: the job to be done ── */
+  header.hero { padding: 84px 0 72px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink-2); margin: 0 0 26px;
+  }
+  .eyebrow::before { content: "◦ "; color: var(--signal); }
+  h1 {
+    font-family: var(--serif); font-weight: 600; letter-spacing: -0.012em;
+    font-size: clamp(40px, 6.4vw, 72px); line-height: 1.06;
+    margin: 0; max-width: 21ch; text-wrap: balance;
+  }
+  h1 em { font-style: italic; color: var(--neural); }
+  .sub { margin: 26px 0 0; max-width: 58ch; font-size: 18px; color: var(--ink-2); }
+  .sub strong { color: var(--ink); }
+  .jobs { display: flex; gap: 10px 26px; flex-wrap: wrap; margin: 26px 0 0; padding: 0; list-style: none; }
+  .jobs li { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .jobs li::before { content: "✓ "; color: var(--chart-a); font-weight: 700; }
+  .cta-row { display: flex; gap: 14px; margin-top: 34px; flex-wrap: wrap; align-items: center; }
+  .pip {
+    display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 13px;
+    background: var(--terminal); color: var(--terminal-dim);
+    border-radius: 8px; padding: 13px 15px; max-width: 100%;
+    overflow-x: auto; white-space: nowrap; box-shadow: 0 12px 32px rgba(27,34,55,0.18);
+  }
+  .pip .dollar { color: var(--signal); -webkit-user-select: none; -moz-user-select: none; user-select: none; }
+  .pip code { color: var(--terminal-ink); font-family: inherit; }
+  .pip button {
+    font-family: var(--mono); font-size: 12px; cursor: pointer; flex: none;
+    background: var(--signal); color: #fff; border: none; border-radius: 6px; padding: 5px 12px;
+  }
+  .pip button:hover { filter: brightness(1.08); }
+  .ghost { font-size: 14.5px; color: var(--ink-2); border-bottom: 1px solid var(--hairline); padding-bottom: 2px; }
+  .ghost:hover { color: var(--ink); text-decoration: none; border-color: var(--ink-2); }
+
+  /* ── the cinema: sticky stage, neuron behind, session in front ── */
+  #cinema { height: 440vh; position: relative; }
+  .stage { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+  #neuron { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .stage-head {
+    position: absolute; top: 26px; left: 0; right: 0; text-align: center; pointer-events: none;
+  }
+  .stage-head .eyebrow { margin: 0 0 6px; }
+  .stage-head h2 { margin: 0; }
+  h2 {
+    font-family: var(--serif); font-weight: 600; letter-spacing: -0.008em;
+    font-size: clamp(26px, 3.6vw, 38px); margin: 8px 0 10px; text-wrap: balance;
+  }
+  .chat {
+    position: absolute; left: max(24px, calc(50vw - 530px)); top: 50%;
+    transform: translateY(-50%); width: min(470px, calc(100vw - 48px));
+    background: var(--terminal); border-radius: 12px;
+    box-shadow: 0 24px 70px rgba(11, 16, 34, 0.38);
+    font-family: var(--mono); font-size: 12.5px; color: var(--terminal-ink);
+  }
+  .chat-bar { display: flex; gap: 7px; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); color: var(--terminal-dim); font-size: 11.5px; }
+  .chat-bar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.14); font-style: normal; }
+  .chat-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 330px; }
+  .msg { line-height: 1.55; opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease; }
+  .msg.on { opacity: 1; transform: none; }
+  .msg .who { color: var(--terminal-dim); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+  .msg.user { border-left: 2px solid rgba(255,255,255,0.18); padding-left: 12px; }
+  .msg.agent { border-left: 2px solid rgba(139,155,224,0.5); padding-left: 12px; }
+  .msg .err { color: #f0908a; }
+  .msg .ok { color: #7fd8ab; }
+  .sys { font-size: 11.5px; color: var(--terminal-dim); }
+  .sys b { color: #8b9be0; font-weight: 500; }
+  .divider { text-align: center; color: var(--terminal-dim); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .divider::before, .divider::after { content: " ··· "; }
+  .recall-card {
+    border-left: 3px solid var(--signal); background: rgba(245, 158, 11, 0.08);
+    border-radius: 0 8px 8px 0; padding: 10px 12px; font-size: 12px;
+  }
+  .recall-card .who { color: var(--signal); }
+  .steps {
+    position: absolute; bottom: 26px; left: 0; right: 0; display: flex; justify-content: center;
+    gap: 8px; padding: 0 24px; pointer-events: none; flex-wrap: wrap;
+  }
+  .step {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 14px;
+    background: color-mix(in srgb, var(--paper) 82%, transparent);
+    transition: color .4s, border-color .4s;
+  }
+  .step.on { color: var(--ink); border-color: var(--neural); }
+  .step.fire.on { color: var(--signal); border-color: var(--signal); }
+  .step b { font-weight: 600; }
+
+  /* ── sections on paper ── */
+  section.sheet { padding: 88px 0; }
+  .rule { border: none; border-top: 1px solid var(--hairline); margin: 0; }
+  .lede { color: var(--ink-2); max-width: 60ch; margin: 0 0 36px; font-size: 16.5px; }
+
+  /* ── the lab log (ledger) ── */
+  .log { border: 1px solid var(--hairline); border-radius: 10px; background: var(--card); overflow: hidden; }
+  .log-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; }
+  thead th {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; text-align: left; padding: 13px 18px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  thead th.c, td.c { text-align: center; }
+  tbody td { padding: 11px 18px; border-bottom: 1px solid var(--grid); font-size: 13.5px; vertical-align: middle; }
+  .when { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .fault { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .fault b { color: var(--redink); font-weight: 600; }
+  .stamp {
+    display: inline-block; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+    border: 1.5px solid currentColor; border-radius: 4px; padding: 2px 8px; transform: rotate(-1.6deg);
+  }
+  .stamp.human { color: var(--blueink); }
+  .stamp.auto { color: var(--chart-a); transform: rotate(1.2deg); }
+  .pencil { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-style: italic; white-space: nowrap; }
+  tr.faded .fault, tr.faded .when { opacity: 0.6; }
+  .tally td { background: var(--paper-2); font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); padding: 13px 18px; border-bottom: none; }
+  .tally .n { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+  .tally .n.human { color: var(--blueink); } .tally .n.rain { color: var(--chart-a); }
+
+  /* ── chart ── */
+  .figure { border: 1px solid var(--hairline); border-radius: 10px; background: var(--card); padding: 26px 26px 16px; }
+  .fig-no { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+  .fig-title { font-family: var(--serif); font-size: 19px; font-weight: 600; margin: 0 0 2px; }
+  .fig-sub { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .legend { display: flex; gap: 24px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 4px; flex-wrap: wrap; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; }
+  .chart-scroll { overflow-x: auto; }
+  #chart { display: block; width: 100%; height: auto; font-family: var(--mono); }
+  #chart text { font-variant-numeric: tabular-nums; }
+  .tip {
+    position: fixed; pointer-events: none; z-index: 50; display: none;
+    background: var(--ink); color: var(--paper); border-radius: 8px; padding: 8px 12px;
+    font-size: 12.5px; box-shadow: 0 10px 30px rgba(11,16,34,0.35); max-width: 270px; line-height: 1.5;
+  }
+  .tip .t-head { font-family: var(--mono); font-size: 10.5px; opacity: 0.7; margin-bottom: 2px; }
+  .footnote { font-size: 12.5px; color: var(--muted); max-width: 76ch; margin: 18px 0 0; }
+  .footnote a { color: var(--ink-2); text-decoration: underline; }
+
+  /* ── pricing ── */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 8px; }
+  @media (max-width: 760px) { .tiers { grid-template-columns: 1fr; } }
+  .tier {
+    display: flex; flex-direction: column; background: var(--card);
+    border: 1px solid var(--hairline); border-radius: 12px; padding: 24px 22px;
+  }
+  .tier.feature { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 14px 40px rgba(217,119,6,0.1); position: relative; }
+  .tier-badge {
+    position: absolute; top: -11px; left: 22px; font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #fff; background: var(--signal); border-radius: 999px; padding: 3px 11px; margin: 0;
+  }
+  .tier-name { font-family: var(--serif); font-size: 21px; font-weight: 600; margin: 0 0 6px; }
+  .tier-price { margin: 0 0 2px; display: flex; align-items: baseline; gap: 7px; }
+  .tier-price .amt { font-family: var(--serif); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .tier-price .per { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .tier-for { font-size: 13px; color: var(--ink-2); margin: 0 0 16px; min-height: 34px; }
+  .tier ul { list-style: none; padding: 0; margin: 0 0 20px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+  .tier li { font-size: 13.5px; color: var(--ink-2); padding-left: 22px; position: relative; line-height: 1.45; }
+  .tier li::before { content: "✓"; position: absolute; left: 0; color: var(--chart-a); font-weight: 700; }
+  .tier li b { color: var(--ink); font-weight: 600; }
+  .tier-cta {
+    text-align: center; font-size: 14px; border-radius: 8px; padding: 11px 16px;
+    font-weight: 500; transition: filter .15s, background .15s;
+  }
+  .tier-cta:hover { text-decoration: none; }
+  .solid-btn { background: var(--signal); color: #fff; }
+  .solid-btn:hover { filter: brightness(1.08); }
+  .ghost-btn { border: 1px solid var(--hairline); color: var(--ink-2); }
+  .ghost-btn:hover { color: var(--ink); border-color: var(--ink-2); }
+  #pricing .footnote { margin-top: 22px; }
+  /* coming-soon cards: intentionally sparse, clearly not-yet-live */
+  .tier.soon {
+    align-items: center; justify-content: center; text-align: center;
+    gap: 14px; border-style: dashed; background: transparent; min-height: 220px;
+  }
+  .tier.soon .tier-name { color: var(--ink-2); margin: 0; }
+  .soon-tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 15px; margin: 0;
+  }
+
+  /* ── independent-signal pull quote ── */
+  .pullquote { margin: 0; border-left: 3px solid var(--signal); padding: 4px 0 4px 26px; max-width: 62ch; }
+  .pullquote p {
+    font-family: var(--serif); font-size: clamp(22px, 3.1vw, 31px); line-height: 1.28;
+    font-weight: 600; letter-spacing: -0.012em; margin: 0 0 12px; text-wrap: balance;
+  }
+  .pullquote footer { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  #validation .footnote a { white-space: nowrap; }
+
+  /* ── economics + footer ── */
+  .strip { display: flex; gap: 12px 30px; flex-wrap: wrap; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); margin-top: 28px; }
+  .strip span::before { content: "— "; color: var(--signal); }
+  footer { padding: 44px 0 70px; color: var(--muted); font-size: 12.5px; }
+  footer .brand { font-size: 15px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { opacity: 0; transform: translateY(14px); animation: rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+    .rise.d1 { animation-delay: .08s; } .rise.d2 { animation-delay: .18s; } .rise.d3 { animation-delay: .28s; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+  }
+  @media (max-width: 720px) {
+    .chat { top: auto; bottom: 96px; transform: none; }
+    .stage-head h2 { font-size: 22px; }
+    .steps { bottom: 18px; gap: 6px; }
+    .step { padding: 4px 10px; font-size: 10.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <span class="brand">rain<em>·</em>man</span>
+    <div class="navlinks">
+      <a href="#cinema">how it works</a>
+      <a href="#you">the ledger</a>
+      <a href="#proof">the evidence</a>
+      <a href="#pricing">pricing</a>
+      <a href="https://github.com/yan-yanko/rainman">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow rise">Project memory for AI coding agents</p>
+    <h1 class="rise d1">The problem with your agent’s memory is <em>you</em>.</h1>
+    <p class="sub rise d2">
+      Not the model — you. You write up the outage; you never write up the
+      Tuesday-afternoon fix. Whatever you don’t write down, your agent can’t
+      remember. Rainman remembers it for you — <strong>so your agent never
+      solves the same bug twice</strong>. Automatically. Locally. For zero tokens.
+    </p>
+    <ul class="jobs rise d2">
+      <li>the second time takes seconds, not another hour</li>
+      <li>no notes to write, no CLAUDE.md to babysit</li>
+      <li>survives compaction, restarts and new sessions</li>
+    </ul>
+    <div class="cta-row rise d3">
+      <span class="pip"><span class="dollar">$</span>
+        <code id="pipcmd">pip install rainman-memory</code>
+        <button id="copy" type="button" aria-label="Copy install command">copy</button>
+      </span>
+      <a class="ghost" href="#cinema">watch a memory form ↓</a>
+    </div>
+  </header>
+</div>
+
+<!-- ── the cinema ── -->
+<div id="cinema">
+  <div class="stage">
+    <canvas id="neuron" aria-hidden="true"></canvas>
+    <div class="stage-head">
+      <p class="eyebrow">scroll — this is the science, drawn to scale of one bug</p>
+      <h2>Watch a memory form.</h2>
+    </div>
+
+    <div class="chat" role="figure" aria-label="An agent session while Rainman encodes, links, and later recalls the fix">
+      <div class="chat-bar"><i></i><i></i><i></i>&nbsp; agent session · ~/your-project</div>
+      <div class="chat-body">
+        <div class="msg user" data-beat="0">
+          <span class="who">you</span>
+          prod is timing out again — <span class="err">sqlalchemy TimeoutError:
+          QueuePool limit of size 5 reached</span> in <b>app/db.py</b>. fix it?
+        </div>
+        <div class="msg agent" data-beat="1">
+          <span class="who">agent</span>
+          Pool exhaustion under load. Raised <b>pool_size=20</b>, enabled
+          <b>pool_pre_ping</b>. <span class="ok">✔ 42 tests passed</span>
+        </div>
+        <div class="msg sys" data-beat="1">
+          <b>rainman</b> · post_tool_use hook → failure→fix card stored · salience 0.82 · 0 tokens
+        </div>
+        <div class="msg sys" data-beat="2">
+          <b>rainman</b> · auto-linked → <b>app/db.py</b> · pool · timeout · 2 prior memories
+        </div>
+        <div class="msg divider" data-beat="3">three weeks later · new session · zero context</div>
+        <div class="msg user" data-beat="3">
+          <span class="who">you</span>
+          <span class="err">TimeoutError: QueuePool limit of size 5 reached</span> — again?!
+        </div>
+        <div class="msg recall-card" data-beat="3">
+          <span class="who">rainman · recall(error=…) · rank 1</span>
+          Fix (21d ago): raise pool_size to 20 + pool_pre_ping — app/db.py
+        </div>
+        <div class="msg agent" data-beat="3">
+          <span class="who">agent</span>
+          We solved this on June 12. Applying the known fix.
+          <span class="ok">✔ done in 40 seconds</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="steps" aria-hidden="true">
+      <span class="step" data-beat="0"><b>① failure</b> — something breaks</span>
+      <span class="step" data-beat="1"><b>② encoding</b> — the hook stores failure→fix</span>
+      <span class="step" data-beat="2"><b>③ association</b> — linked to files &amp; memories</span>
+      <span class="step fire" data-beat="3"><b>④ retrieval</b> — the error fires it back</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <hr class="rule" />
+
+  <section class="sheet" id="you">
+    <p class="eyebrow">the ledger — why notes and CLAUDE.md aren’t enough</p>
+    <h2>An honest week in your repo.</h2>
+    <p class="lede">
+      Nine things broke and got fixed. You wrote up the outage and one decision —
+      of course you did. The other seven live only in the right-hand column,
+      which is the one your agent reads from next week:
+    </p>
+    <div class="log">
+      <div class="log-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>when</th>
+            <th>what broke &amp; got fixed</th>
+            <th class="c">your notes</th>
+            <th class="c">rainman</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="when">Mon 09:14</td>
+            <td class="fault"><b>TimeoutError</b>: QueuePool limit of size 5 reached</td>
+            <td class="c"><span class="stamp human">postmortem</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Mon 16:40</td>
+            <td class="fault"><b>KeyError</b>: 'next_cursor' on the last page</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Tue 11:02</td>
+            <td class="fault"><b>AssertionError</b>: test_billing_rollover, some mornings only</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Tue 15:27</td>
+            <td class="fault"><b>TypeError</b>: datetime is not JSON serializable</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr>
+            <td class="when">Wed 10:31</td>
+            <td class="fault"><b>ExpiredSignatureError</b>: mobile clocks drift</td>
+            <td class="c"><span class="stamp human">decision</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Wed 17:55</td>
+            <td class="fault"><b>ModuleNotFoundError</b>: in the container, not locally</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Thu 12:08</td>
+            <td class="fault"><b>KeyError</b>: 'STRIPE_TEST_KEY' during CI collection</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Fri 09:47</td>
+            <td class="fault"><b>UnicodeEncodeError</b>: 'charmap' can’t encode '✓'</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="faded">
+            <td class="when">Fri 14:33</td>
+            <td class="fault"><b>Timeout</b>: lock still held by the test that failed</td>
+            <td class="c"><span class="pencil">never written down</span></td>
+            <td class="c"><span class="stamp auto">logged</span></td>
+          </tr>
+          <tr class="tally">
+            <td colspan="2">what your agent can remember next week</td>
+            <td class="c"><span class="n human">2 / 9</span></td>
+            <td class="c"><span class="n rain">9 / 9</span></td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet" id="proof">
+    <p class="eyebrow">reproducible · deterministic · no LLM in the loop</p>
+    <h2>Coverage is the ceiling.</h2>
+    <p class="lede">
+      When an old error recurs, can retrieval surface the old fix? Grep over your
+      notes works almost perfectly on what you wrote — it just can’t read a note
+      that was never written. Rainman recalls from what the hooks captured,
+      conditioned on the error itself. No query. No discipline.
+    </p>
+    <div class="figure">
+      <p class="fig-no">Fig. 1 — lazy-notes bench</p>
+      <p class="fig-title">Old fix surfaced when the error recurred (top-5)</p>
+      <p class="fig-sub">by how often you actually write down routine fixes</p>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--chart-a)"></span>Rainman — auto-learned store, 60 junk cards included</span>
+        <span><span class="sw" style="background:var(--chart-b)"></span>grep your notes — curated, noise-free file</span>
+      </div>
+      <div class="chart-scroll"><svg id="chart" viewBox="0 0 860 330" role="img"
+        aria-label="Line chart: fixes surfaced when errors recurred. Rainman stays at 100 percent regardless of note-taking diligence. Grep over your notes rises from 25 percent at zero diligence to 92 percent at full diligence."></svg></div>
+      <p class="footnote">
+        Deterministic bench: 12 incidents whose errors later recur; the notes file is
+        curated and noise-free while Rainman’s store carries 60 auto-learn junk cards;
+        result holds at 200. The honest part: at 100% diligence it’s a tie — the
+        advantage is <em>coverage, not ranking</em>. Nobody keeps 100% diligence.
+        Reproduce: <a href="https://github.com/yan-yanko/rainman">eval/local_demo/lazy_notes_bench.py</a>.
+      </p>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet" id="validation">
+    <p class="eyebrow">independent signal</p>
+    <h2>Context is half the battle — and we’re not the only ones who found it.</h2>
+    <p class="lede">
+      Databricks benchmarked coding agents on their own multi-million-line
+      codebase. The takeaway wasn’t which model won — it was how the context
+      reaches the model.
+    </p>
+    <blockquote class="pullquote">
+      <p>“Model choice is only one piece of the puzzle.”</p>
+      <footer>— Databricks, benchmarking coding agents on a multi-million-line codebase</footer>
+    </blockquote>
+    <p class="lede" style="margin-top:26px; margin-bottom:0">
+      Their best-performing setup <b>sent about 3× less context per turn</b> —
+      “keeping a tighter working set,” with quality unchanged. That is exactly
+      what Rainman is for: surface the handful of memories that matter for
+      <em>this</em> task, not the whole notebook.
+    </p>
+    <p class="footnote">
+      Independent Databricks study — Rainman wasn’t part of it; cited for the
+      finding, not as an endorsement.
+      <a href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase">Read it →</a>
+    </p>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet">
+    <p class="eyebrow">the economics</p>
+    <h2 style="max-width:30ch">It can afford to remember everything, because remembering costs nothing.</h2>
+    <p class="lede" style="margin-bottom:0">
+      Storing, scoring and ranking are keyword math on your machine. Recalled
+      memories arrive as ordinary context — you pay input tokens only for the
+      five lines that mattered, never for the notebook.
+    </p>
+    <div class="strip">
+      <span>zero LLM calls</span>
+      <span>zero dependencies · stdlib only</span>
+      <span>local — nothing leaves the machine</span>
+      <span>MCP + hooks · Claude Code, Cursor, Zed, VS Code…</span>
+      <span>MIT</span>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet" id="pricing">
+    <p class="eyebrow">pricing</p>
+    <h2>Free today. More coming soon.</h2>
+    <p class="lede">
+      The full memory engine is open-source and free forever — everything you
+      need to start right now. Two more plans are on the way.
+    </p>
+    <div class="tiers">
+      <div class="tier feature">
+        <p class="tier-badge">available now</p>
+        <p class="tier-name">Free</p>
+        <p class="tier-price"><span class="amt">$0</span><span class="per">forever</span></p>
+        <p class="tier-for">for every developer</p>
+        <ul>
+          <li>The full memory engine, on your machine</li>
+          <li>Recall, auto-learn, failure→fix cards</li>
+          <li>Works with Claude Code, Cursor, Zed, VS Code…</li>
+          <li>Local audit log &amp; policy</li>
+          <li>Zero LLM calls · zero data leaves your machine</li>
+        </ul>
+        <a class="tier-cta solid-btn" href="https://pypi.org/project/rainman-memory/">pip install rainman-memory</a>
+      </div>
+
+      <div class="tier soon">
+        <p class="tier-name">Pro</p>
+        <p class="soon-tag">Coming soon</p>
+      </div>
+
+      <div class="tier soon">
+        <p class="tier-name">Team</p>
+        <p class="soon-tag">Coming soon</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="brand">rain<em>·</em>man</span> — project memory for AI coding agents · hero concept mockup
+  </footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+(function () {
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── copy chip ── */
+  var copyBtn = document.getElementById('copy');
+  copyBtn.addEventListener('click', function () {
+    var txt = document.getElementById('pipcmd').textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+      .then(function () { copyBtn.textContent = 'copied'; setTimeout(function () { copyBtn.textContent = 'copy'; }, 1400); })
+      .catch(function () { copyBtn.textContent = 'select it'; });
+  });
+
+  /* ── tokens (re-read on theme change) ── */
+  function tokens() {
+    var s = getComputedStyle(document.documentElement);
+    return {
+      neural: s.getPropertyValue('--neural').trim(),
+      soft: s.getPropertyValue('--neural-soft').trim(),
+      signal: s.getPropertyValue('--signal').trim(),
+      muted: s.getPropertyValue('--muted').trim()
+    };
+  }
+  var TK = tokens();
+  new MutationObserver(function () { TK = tokens(); drawScene(lastP, true); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    TK = tokens(); drawScene(lastP, true);
+  });
+
+  /* ── the neuron: procedural arbor, grown by scroll ── */
+  var canvas = document.getElementById('neuron');
+  var ctx = canvas.getContext('2d');
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var W = 0, H = 0, NEURON = null;
+
+  function rng(seed) {
+    return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  }
+  function polyline(x, y, angle, len, segs, wobble, rand) {
+    var pts = [{ x: x, y: y }], step = len / segs, a = angle;
+    for (var i = 0; i < segs; i++) {
+      a += (rand() - 0.5) * wobble;
+      x += Math.cos(a) * step * (0.75 + rand() * 0.5);
+      y += Math.sin(a) * step * (0.75 + rand() * 0.5);
+      pts.push({ x: x, y: y });
+    }
+    return pts;
+  }
+  function measure(pts) {
+    var L = 0, cum = [0];
+    for (var i = 1; i < pts.length; i++) {
+      L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      cum.push(L);
+    }
+    return { len: L, cum: cum };
+  }
+  function build() {
+    var rand = rng(20260703);
+    var sx = W * 0.66, sy = H * 0.44;
+    var branches = [];
+    function grow(x, y, angle, len, depth, t0) {
+      var pts = polyline(x, y, angle, len, 7, 0.55, rand);
+      var m = measure(pts);
+      branches.push({ pts: pts, cum: m.cum, len: m.len, w: 0.9 + depth * 0.85, t0: t0, t1: t0 + 0.3 });
+      if (depth > 0) {
+        var kids = 2 + (rand() > 0.6 ? 1 : 0);
+        for (var k = 0; k < kids; k++) {
+          var at = pts[4 + Math.floor(rand() * 3)];
+          grow(at.x, at.y, angle + (rand() - 0.5) * 1.5, len * 0.55, depth - 1, t0 + 0.22 + rand() * 0.1);
+        }
+      }
+    }
+    for (var i = 0; i < 7; i++) {
+      var a = -2.6 + i * 0.62 + (rand() - 0.5) * 0.25;
+      grow(sx, sy, a, Math.min(W, H) * 0.2, 2, rand() * 0.12);
+    }
+    /* axon: soma → toward the session card (retrieval path) */
+    var axPts = [{ x: sx, y: sy }];
+    var tx = Math.max(W * 0.42, 340), ty = H * 0.6;
+    var steps = 26;
+    for (var j = 1; j <= steps; j++) {
+      var u = j / steps;
+      var mx = sx + (tx - sx) * u, my = sy + (ty - sy) * u;
+      var sway = Math.sin(u * Math.PI * 2.2) * H * 0.05 * (1 - u);
+      axPts.push({ x: mx, y: my + sway });
+    }
+    var am = measure(axPts);
+    /* prior memory nodes + association edges */
+    var nodes = [
+      { x: W * 0.87, y: H * 0.7, label: 'app/db.py · pool tuning' },
+      { x: W * 0.83, y: H * 0.2, label: 'failure · request timeout' }
+    ];
+    var edges = nodes.map(function (n) {
+      var pts = [], stepsE = 18;
+      for (var e = 0; e <= stepsE; e++) {
+        var u2 = e / stepsE;
+        var cx = (sx + n.x) / 2 + (n.y - sy) * 0.14, cy = (sy + n.y) / 2 - (n.x - sx) * 0.14;
+        var x1 = (1 - u2) * (1 - u2) * sx + 2 * (1 - u2) * u2 * cx + u2 * u2 * n.x;
+        var y1 = (1 - u2) * (1 - u2) * sy + 2 * (1 - u2) * u2 * cy + u2 * u2 * n.y;
+        pts.push({ x: x1, y: y1 });
+      }
+      var mm = measure(pts);
+      return { pts: pts, cum: mm.cum, len: mm.len };
+    });
+    NEURON = { sx: sx, sy: sy, branches: branches, axon: { pts: axPts, cum: am.cum, len: am.len }, nodes: nodes, edges: edges };
+  }
+
+  function partial(b, frac) {
+    if (frac <= 0) return null;
+    var target = b.len * Math.min(1, frac), pts = [b.pts[0]];
+    for (var i = 1; i < b.pts.length; i++) {
+      if (b.cum[i] <= target) { pts.push(b.pts[i]); continue; }
+      var seg = b.cum[i] - b.cum[i - 1];
+      var t = (target - b.cum[i - 1]) / seg;
+      pts.push({ x: b.pts[i - 1].x + (b.pts[i].x - b.pts[i - 1].x) * t,
+                 y: b.pts[i - 1].y + (b.pts[i].y - b.pts[i - 1].y) * t });
+      break;
+    }
+    return pts;
+  }
+  function stroke(pts, w, color, alpha) {
+    if (!pts || pts.length < 2) return;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = w;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function at(b, frac) {
+    var target = b.len * Math.max(0, Math.min(1, frac));
+    for (var i = 1; i < b.pts.length; i++) {
+      if (b.cum[i] >= target) {
+        var t = (target - b.cum[i - 1]) / (b.cum[i] - b.cum[i - 1] || 1);
+        return { x: b.pts[i - 1].x + (b.pts[i].x - b.pts[i - 1].x) * t,
+                 y: b.pts[i - 1].y + (b.pts[i].y - b.pts[i - 1].y) * t };
+      }
+    }
+    return b.pts[b.pts.length - 1];
+  }
+  function ease(x) { return x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); }
+
+  var lastP = -1;
+  function drawScene(p, force) {
+    if (!NEURON) return;
+    if (!force && Math.abs(p - lastP) < 0.0005) return;
+    lastP = p;
+    ctx.clearRect(0, 0, W, H);
+
+    var g = ease((p - 0.04) / 0.5);            /* arbor growth: beats ①–② */
+    var glow = ease((p - 0.26) / 0.2);          /* soma consolidates */
+    var assoc = ease((p - 0.46) / 0.2);         /* beat ③ links */
+    var pulse = (p - 0.72) / 0.2;               /* beat ④ retrieval sweep */
+
+    /* dendritic arbor */
+    NEURON.branches.forEach(function (b) {
+      var f = ease((g - b.t0) / (b.t1 - b.t0));
+      stroke(partial(b, f), b.w, TK.neural, 0.34 + 0.3 * f);
+    });
+
+    /* soma */
+    if (g > 0.05) {
+      var r = 7 + 6 * glow;
+      var grad = ctx.createRadialGradient(NEURON.sx, NEURON.sy, 1, NEURON.sx, NEURON.sy, r * 3.4);
+      grad.addColorStop(0, TK.signal); grad.addColorStop(1, 'rgba(0,0,0,0)');
+      if (glow > 0) { ctx.globalAlpha = 0.22 * glow; ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(NEURON.sx, NEURON.sy, r * 3.4, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.beginPath(); ctx.arc(NEURON.sx, NEURON.sy, r, 0, 7);
+      ctx.fillStyle = TK.neural; ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+    }
+
+    /* association edges + prior nodes */
+    if (assoc > 0) {
+      NEURON.edges.forEach(function (e, i) {
+        stroke(partial(e, assoc), 1.2, TK.neural, 0.5);
+        var n = NEURON.nodes[i];
+        ctx.beginPath(); ctx.arc(n.x, n.y, 5.5, 0, 7);
+        ctx.fillStyle = TK.neural; ctx.globalAlpha = 0.35 + 0.4 * assoc; ctx.fill(); ctx.globalAlpha = 1;
+        if (assoc > 0.85) {
+          ctx.font = '11px ' + '"JetBrains Mono", ui-monospace, monospace';
+          ctx.fillStyle = TK.muted; ctx.globalAlpha = (assoc - 0.85) / 0.15;
+          ctx.textAlign = n.x > W * 0.5 ? 'end' : 'start';
+          ctx.fillText(n.label, n.x + (n.x > W * 0.5 ? -12 : 12), n.y + 4);
+          ctx.globalAlpha = 1;
+        }
+      });
+    }
+
+    /* retrieval: axon draws + amber impulse travels soma → session */
+    if (pulse > -0.35) {
+      var axDraw = ease((p - 0.62) / 0.12);
+      stroke(partial(NEURON.axon, axDraw), 2, TK.neural, 0.55);
+      if (pulse > 0 && pulse <= 1.15) {
+        var u = Math.min(1, pulse);
+        var pt = at(NEURON.axon, u);
+        var pg = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 26);
+        pg.addColorStop(0, TK.signal); pg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 0.8; ctx.fillStyle = pg;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 26, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1; ctx.fillStyle = TK.signal;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 4.5, 0, 7); ctx.fill();
+        /* trailing shimmer */
+        for (var s = 1; s <= 4; s++) {
+          var tu = u - s * 0.045; if (tu <= 0) break;
+          var tp = at(NEURON.axon, tu);
+          ctx.globalAlpha = 0.35 / s; ctx.fillStyle = TK.signal;
+          ctx.beginPath(); ctx.arc(tp.x, tp.y, 3, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+        }
+        /* arrival ripple at the session card */
+        if (u > 0.96) {
+          var end = at(NEURON.axon, 1), rr = 10 + (pulse - 0.96) * 240;
+          ctx.beginPath(); ctx.arc(end.x, end.y, rr, 0, 7);
+          ctx.strokeStyle = TK.signal; ctx.globalAlpha = Math.max(0, 0.5 - (pulse - 0.96) * 2.4);
+          ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      }
+    }
+  }
+
+  function resize() {
+    var stage = document.querySelector('.stage');
+    W = stage.clientWidth; H = stage.clientHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    build(); drawScene(lastP < 0 ? 0 : lastP, true);
+  }
+  window.addEventListener('resize', resize);
+
+  /* ── the scroll engine ── */
+  var cinema = document.getElementById('cinema');
+  var msgs = document.querySelectorAll('.msg');
+  var steps = document.querySelectorAll('.step');
+  var BEAT_AT = [0, 0.26, 0.5, 0.68];
+  function setBeat(p) {
+    var beat = 0;
+    for (var i = 0; i < BEAT_AT.length; i++) if (p >= BEAT_AT[i]) beat = i;
+    msgs.forEach(function (m) { m.classList.toggle('on', +m.dataset.beat <= beat); });
+    steps.forEach(function (s) { s.classList.toggle('on', +s.dataset.beat === beat); });
+  }
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(function () {
+      ticking = false;
+      var r = cinema.getBoundingClientRect();
+      var total = cinema.offsetHeight - window.innerHeight;
+      var p = total > 0 ? Math.max(0, Math.min(1, -r.top / total)) : 1;
+      setBeat(p); drawScene(p);
+    });
+  }
+
+  if (REDUCED) {
+    /* no cinema: show the finished figure, everything visible */
+    cinema.style.height = '100vh';
+    resize(); drawScene(1, true); setBeat(1);
+    msgs.forEach(function (m) { m.classList.add('on'); });
+  } else {
+    resize();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  /* ── Fig. 1 ── */
+  var DIL = [0, 33, 67, 100];
+  var css = getComputedStyle(document.documentElement);
+  function chartColors() {
+    var s = getComputedStyle(document.documentElement);
+    return { a: s.getPropertyValue('--chart-a').trim(), b: s.getPropertyValue('--chart-b').trim(),
+             ink: s.getPropertyValue('--ink').trim(), mut: s.getPropertyValue('--muted').trim(),
+             grid: s.getPropertyValue('--hairline').trim(), card: s.getPropertyValue('--card').trim() };
+  }
+  var SERIES = [
+    { name: 'Rainman', key: 'a', vals: [100, 100, 100, 100], w: 700,
+      note: function () { return '12 of 12 fixes surfaced (mean rank 1)'; } },
+    { name: 'grep your notes', key: 'b', vals: [25, 50, 67, 92], w: 400,
+      note: function (i) { return ['3 of 12 — only the write-ups exist', '6 of 12 fixes surfaced', '8 of 12 fixes surfaced', '11 of 12 — a tie, in practice'][i]; } }
+  ];
+  var svg = document.getElementById('chart'), NS = 'http://www.w3.org/2000/svg';
+  var CW = 860, CH = 330, L = 64, R = 195, T = 26, B = 52, pw = CW - L - R, ph = CH - T - B;
+  function X(d) { return L + (d / 100) * pw; }
+  function Y(v) { return T + (1 - v / 100) * ph; }
+  function el(tag, attrs, text) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function renderChart() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var C = chartColors();
+    [0, 25, 50, 75, 100].forEach(function (v) {
+      svg.appendChild(el('line', { x1: L, x2: L + pw, y1: Y(v), y2: Y(v), stroke: C.grid, 'stroke-width': 1 }));
+      svg.appendChild(el('text', { x: L - 10, y: Y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: C.mut }, v + '%'));
+    });
+    DIL.forEach(function (d) {
+      svg.appendChild(el('text', { x: X(d), y: T + ph + 22, 'text-anchor': 'middle', 'font-size': 11, fill: C.mut }, d + '%'));
+    });
+    svg.appendChild(el('text', { x: L + pw / 2, y: CH - 8, 'text-anchor': 'middle', 'font-size': 11, fill: C.mut }, 'routine fixes you write down'));
+    var tip = document.getElementById('tip');
+    SERIES.forEach(function (s) {
+      var color = s.key === 'a' ? C.a : C.b;
+      var d = s.vals.map(function (v, i) { return (i ? 'L' : 'M') + X(DIL[i]) + ' ' + Y(v); }).join(' ');
+      svg.appendChild(el('path', { d: d, fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      s.vals.forEach(function (v, i) {
+        svg.appendChild(el('circle', { cx: X(DIL[i]), cy: Y(v), r: 4.5, fill: color, stroke: C.card, 'stroke-width': 2 }));
+        var hit = el('circle', { cx: X(DIL[i]), cy: Y(v), r: 15, fill: 'transparent' });
+        hit.addEventListener('mousemove', function (ev) {
+          tip.innerHTML = '<div class="t-head">' + s.name + ' · diligence ' + DIL[i] + '%</div><strong>' + v + '%</strong> — ' + s.note(i);
+          tip.style.display = 'block';
+          tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 12) + 'px';
+          tip.style.top = (ev.clientY - 14) + 'px';
+        });
+        hit.addEventListener('mouseleave', function () { tip.style.display = 'none'; });
+        svg.appendChild(hit);
+      });
+      var last = s.vals[s.vals.length - 1];
+      var ly = Y(last) + 4;
+      if (s.key === 'b' && Y(last) - Y(100) < 26) ly = Y(last) + 20;
+      svg.appendChild(el('circle', { cx: L + pw + 14, cy: ly - 4, r: 4, fill: color }));
+      svg.appendChild(el('text', { x: L + pw + 24, y: ly, 'font-size': 12, fill: C.ink, 'font-weight': s.w }, s.name + ' ' + last + '%'));
+    });
+  }
+  renderChart();
+  new MutationObserver(renderChart).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderChart);
+})();
+</script>
+
+</body>
 </html>
