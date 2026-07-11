@@ -1,11 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Rainman is project memory for AI coding agents. It remembers every failure, fix and decision your agent makes — and recalls the right one the moment the same problem returns. Zero LLM calls, zero dependencies, runs local. Free and open-source." />
+<meta property="og:title" content="Rainman — your agent never solves the same bug twice" />
+<meta property="og:description" content="Project memory for AI coding agents. Remembers what failed, what fixed it, what your team decided — and surfaces it when the same problem returns. Zero LLM calls. Runs local. Free & open-source." />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
 <title>Rainman — the problem with your agent’s memory is you</title>
-</head>
-<body>
 <style>
   /* ── tokens: a lucid lab notebook. Light = ink on cool paper (Cajal),
        dark = the same neuron, bioluminescent. Theme via tokens only. ── */
@@ -235,6 +239,59 @@
   .footnote { font-size: 12.5px; color: var(--muted); max-width: 76ch; margin: 18px 0 0; }
   .footnote a { color: var(--ink-2); text-decoration: underline; }
 
+  /* ── pricing ── */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 8px; }
+  @media (max-width: 760px) { .tiers { grid-template-columns: 1fr; } }
+  .tier {
+    display: flex; flex-direction: column; background: var(--card);
+    border: 1px solid var(--hairline); border-radius: 12px; padding: 24px 22px;
+  }
+  .tier.feature { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 14px 40px rgba(217,119,6,0.1); position: relative; }
+  .tier-badge {
+    position: absolute; top: -11px; left: 22px; font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #fff; background: var(--signal); border-radius: 999px; padding: 3px 11px; margin: 0;
+  }
+  .tier-name { font-family: var(--serif); font-size: 21px; font-weight: 600; margin: 0 0 6px; }
+  .tier-price { margin: 0 0 2px; display: flex; align-items: baseline; gap: 7px; }
+  .tier-price .amt { font-family: var(--serif); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .tier-price .per { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .tier-for { font-size: 13px; color: var(--ink-2); margin: 0 0 16px; min-height: 34px; }
+  .tier ul { list-style: none; padding: 0; margin: 0 0 20px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+  .tier li { font-size: 13.5px; color: var(--ink-2); padding-left: 22px; position: relative; line-height: 1.45; }
+  .tier li::before { content: "✓"; position: absolute; left: 0; color: var(--chart-a); font-weight: 700; }
+  .tier li b { color: var(--ink); font-weight: 600; }
+  .tier-cta {
+    text-align: center; font-size: 14px; border-radius: 8px; padding: 11px 16px;
+    font-weight: 500; transition: filter .15s, background .15s;
+  }
+  .tier-cta:hover { text-decoration: none; }
+  .solid-btn { background: var(--signal); color: #fff; }
+  .solid-btn:hover { filter: brightness(1.08); }
+  .ghost-btn { border: 1px solid var(--hairline); color: var(--ink-2); }
+  .ghost-btn:hover { color: var(--ink); border-color: var(--ink-2); }
+  #pricing .footnote { margin-top: 22px; }
+  /* coming-soon cards: intentionally sparse, clearly not-yet-live */
+  .tier.soon {
+    align-items: center; justify-content: center; text-align: center;
+    gap: 14px; border-style: dashed; background: transparent; min-height: 220px;
+  }
+  .tier.soon .tier-name { color: var(--ink-2); margin: 0; }
+  .soon-tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 15px; margin: 0;
+  }
+
+  /* ── independent-signal pull quote ── */
+  .pullquote { margin: 0; border-left: 3px solid var(--signal); padding: 4px 0 4px 26px; max-width: 62ch; }
+  .pullquote p {
+    font-family: var(--serif); font-size: clamp(22px, 3.1vw, 31px); line-height: 1.28;
+    font-weight: 600; letter-spacing: -0.012em; margin: 0 0 12px; text-wrap: balance;
+  }
+  .pullquote footer { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  #validation .footnote a { white-space: nowrap; }
+
   /* ── economics + footer ── */
   .strip { display: flex; gap: 12px 30px; flex-wrap: wrap; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); margin-top: 28px; }
   .strip span::before { content: "— "; color: var(--signal); }
@@ -253,7 +310,8 @@
     .step { padding: 4px 10px; font-size: 10.5px; }
   }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <nav>
     <span class="brand">rain<em>·</em>man</span>
@@ -261,6 +319,7 @@
       <a href="#cinema">how it works</a>
       <a href="#you">the ledger</a>
       <a href="#proof">the evidence</a>
+      <a href="#pricing">pricing</a>
       <a href="https://github.com/yan-yanko/rainman">GitHub</a>
     </div>
   </nav>
@@ -281,7 +340,7 @@
     </ul>
     <div class="cta-row rise d3">
       <span class="pip"><span class="dollar">$</span>
-        <code id="pipcmd">pip install git+https://github.com/yan-yanko/rainman.git</code>
+        <code id="pipcmd">pip install rainman-memory</code>
         <button id="copy" type="button" aria-label="Copy install command">copy</button>
       </span>
       <a class="ghost" href="#cinema">watch a memory form ↓</a>
@@ -464,6 +523,33 @@
 
   <hr class="rule" />
 
+  <section class="sheet" id="validation">
+    <p class="eyebrow">independent signal</p>
+    <h2>Context is half the battle — and we’re not the only ones who found it.</h2>
+    <p class="lede">
+      Databricks benchmarked coding agents on their own multi-million-line
+      codebase. The takeaway wasn’t which model won — it was how the context
+      reaches the model.
+    </p>
+    <blockquote class="pullquote">
+      <p>“Model choice is only one piece of the puzzle.”</p>
+      <footer>— Databricks, benchmarking coding agents on a multi-million-line codebase</footer>
+    </blockquote>
+    <p class="lede" style="margin-top:26px; margin-bottom:0">
+      Their best-performing setup <b>sent about 3× less context per turn</b> —
+      “keeping a tighter working set,” with quality unchanged. That is exactly
+      what Rainman is for: surface the handful of memories that matter for
+      <em>this</em> task, not the whole notebook.
+    </p>
+    <p class="footnote">
+      Independent Databricks study — Rainman wasn’t part of it; cited for the
+      finding, not as an endorsement.
+      <a href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase">Read it →</a>
+    </p>
+  </section>
+
+  <hr class="rule" />
+
   <section class="sheet">
     <p class="eyebrow">the economics</p>
     <h2 style="max-width:30ch">It can afford to remember everything, because remembering costs nothing.</h2>
@@ -478,6 +564,43 @@
       <span>local — nothing leaves the machine</span>
       <span>MCP + hooks · Claude Code, Cursor, Zed, VS Code…</span>
       <span>MIT</span>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet" id="pricing">
+    <p class="eyebrow">pricing</p>
+    <h2>Free today. More coming soon.</h2>
+    <p class="lede">
+      The full memory engine is open-source and free forever — everything you
+      need to start right now. Two more plans are on the way.
+    </p>
+    <div class="tiers">
+      <div class="tier feature">
+        <p class="tier-badge">available now</p>
+        <p class="tier-name">Free</p>
+        <p class="tier-price"><span class="amt">$0</span><span class="per">forever</span></p>
+        <p class="tier-for">for every developer</p>
+        <ul>
+          <li>The full memory engine, on your machine</li>
+          <li>Recall, auto-learn, failure→fix cards</li>
+          <li>Works with Claude Code, Cursor, Zed, VS Code…</li>
+          <li>Local audit log &amp; policy</li>
+          <li>Zero LLM calls · zero data leaves your machine</li>
+        </ul>
+        <a class="tier-cta solid-btn" href="https://pypi.org/project/rainman-memory/">pip install rainman-memory</a>
+      </div>
+
+      <div class="tier soon">
+        <p class="tier-name">Pro</p>
+        <p class="soon-tag">Coming soon</p>
+      </div>
+
+      <div class="tier soon">
+        <p class="tier-name">Team</p>
+        <p class="soon-tag">Coming soon</p>
+      </div>
     </div>
   </section>
 
