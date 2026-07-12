@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="Rainman is project memory for AI coding agents. It captures the routine fixes and decisions that usually disappear between sessions — and brings them back the moment the problem returns. Zero LLM calls, zero dependencies, runs local. Free and open-source." />
+<meta name="description" content="Rainman is project memory for AI coding agents. It captures the routine fixes and decisions that usually disappear between sessions — and brings them back the moment the problem returns. No LLM calls, no network calls, zero dependencies. Free and open-source." />
 <meta property="og:title" content="Rainman — your agents never solve the same bug twice" />
-<meta property="og:description" content="Project memory for AI coding agents. Captures the fixes and decisions that vanish between sessions, and surfaces them when the problem returns. Zero LLM calls. Runs local. Free & open-source." />
+<meta property="og:description" content="Project memory for AI coding agents. Captures the fixes and decisions that vanish between sessions, and surfaces them when the problem returns. No LLM calls. No network calls. Free & open-source." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://yan-yanko.github.io/rainman/" />
 <meta property="og:image" content="https://yan-yanko.github.io/rainman/og.png" />
@@ -329,15 +329,6 @@
   .wait { font-family: var(--mono); font-size: 12px; color: var(--blueink); }
   @media (max-width: 640px) { .navlinks { gap: 14px; } .navlinks a:not(.gh) { display: none; } }
 
-  /* ── independent-signal pull quote ── */
-  .pullquote { margin: 0; border-left: 3px solid var(--signal); padding: 4px 0 4px 26px; max-width: 62ch; }
-  .pullquote p {
-    font-family: var(--serif); font-size: clamp(22px, 3.1vw, 31px); line-height: 1.28;
-    font-weight: 600; letter-spacing: -0.012em; margin: 0 0 12px; text-wrap: balance;
-  }
-  .pullquote footer { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
-  #validation .footnote a { white-space: nowrap; }
-
   /* ── footer ── */
   footer { padding: 44px 0 70px; color: var(--muted); font-size: 12.5px; }
   footer .brand { font-size: 15px; }
@@ -389,7 +380,7 @@
       </span>
       <a class="ghost" href="#demo">watch it work ↓</a>
     </div>
-    <p class="trust rise d3">local by default · MIT · 340 tests · zero dependencies ·
+    <p class="trust rise d3">local by default · MIT · 300+ tests · zero dependencies ·
       secrets redacted · every memory has provenance</p>
   </header>
 
@@ -402,6 +393,9 @@
       </div>
       <div class="dterm" id="dterm" aria-label="Terminal demo: a bug fixed today is recalled instantly when it returns three weeks later"></div>
     </div>
+    <p class="footnote" style="margin-top:12px">Illustrative replay of a real
+      Rainman workflow — the failure→fix pairing and error-conditioned recall it
+      shows are <a href="https://github.com/yan-yanko/rainman/tree/main/eval/local_demo">reproducible from the repo</a>.</p>
   </section>
 
   <section class="how" id="how">
@@ -410,8 +404,9 @@
       <div class="step3">
         <p class="k">1 · install once</p>
         <h3><code>pip install rainman-memory</code></h3>
-        <p>Then <code>rainman setup</code>. Two minutes, one time — works with
-        Claude Code, Cursor, and any AI coding tool.</p>
+        <p>Then <code>rainman setup</code>. Two minutes, one time. Automatic with
+        Claude Code, via MCP in Cursor/VS Code/Windsurf, via a git hook
+        anywhere else.</p>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="step3">
@@ -580,37 +575,15 @@
         advantage is <em>coverage, not ranking</em>. Nobody keeps 100% diligence.
         Reproduce: <a href="https://github.com/yan-yanko/rainman/blob/main/eval/local_demo/lazy_notes_bench.py">eval/local_demo/lazy_notes_bench.py</a>.
       </p>
+      <p class="footnote">Outside signal, same direction: Databricks’ coding-agent
+        benchmark concluded “model choice is only one piece of the puzzle” — their
+        best harness sent ~3× less context per turn at equal quality. Independent
+        study; Rainman wasn’t part of it.
+        <a href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase">Read it →</a></p>
     </div>
   </section>
 
-  <hr class="rule" />
-
-  <section class="sheet" id="validation">
-    <p class="eyebrow">independent signal</p>
-    <h2>Context is half the battle — and we’re not the only ones who found it.</h2>
-    <p class="lede">
-      Databricks benchmarked coding agents on their own multi-million-line
-      codebase. The takeaway wasn’t which model won — it was how the context
-      reaches the model.
-    </p>
-    <blockquote class="pullquote">
-      <p>“Model choice is only one piece of the puzzle.”</p>
-      <footer>— Databricks, benchmarking coding agents on a multi-million-line codebase</footer>
-    </blockquote>
-    <p class="lede" style="margin-top:26px; margin-bottom:0">
-      Their best-performing setup <b>sent about 3× less context per turn</b> —
-      “keeping a tighter working set,” with quality unchanged. That is exactly
-      what Rainman is for: surface the handful of memories that matter for
-      <em>this</em> task, not the whole notebook.
-    </p>
-    <p class="footnote">
-      Independent Databricks study — Rainman wasn’t part of it; cited for the
-      finding, not as an endorsement.
-      <a href="https://www.databricks.com/blog/benchmarking-coding-agents-databricks-multi-million-line-codebase">Read it →</a>
-    </p>
-  </section>
-
-    <hr class="rule" />
+      <hr class="rule" />
 
   <section class="sheet" id="pricing">
     <p class="eyebrow">pricing</p>
@@ -630,21 +603,21 @@
           <li>Recall, auto-learn, failure→fix cards</li>
           <li>Works with Claude Code, Cursor, Zed, VS Code…</li>
           <li>Local audit log &amp; policy</li>
-          <li>Zero LLM calls · zero data leaves your machine</li>
+          <li>No LLM calls, no network calls — you control what’s committed and pushed</li>
         </ul>
         <a class="tier-cta solid-btn" href="https://pypi.org/project/rainman-memory/">pip install rainman-memory</a>
       </div>
 
       <div class="tier soon">
         <p class="tier-name">Pro</p>
-        <p class="soon-line">Your memory, synced across all your machines.</p>
+        <p class="soon-line">Your personal, cross-project memory — synced across your machines without touching any repo.</p>
         <p class="soon-tag">Coming soon</p>
         <a class="wait" href="mailto:yanko1984@gmail.com?subject=Rainman%20Pro%20waitlist">join the waitlist →</a>
       </div>
 
       <div class="tier soon">
         <p class="tier-name">Team</p>
-        <p class="soon-line">Shared team memory — one dev’s fix, every agent’s knowledge.</p>
+        <p class="soon-line">A private memory server for your org — nothing committed to the repo; permissions, SSO, tamper-evident audit.</p>
         <p class="soon-tag">Coming soon</p>
         <a class="wait" href="mailto:yanko1984@gmail.com?subject=Rainman%20Team%20waitlist">join the waitlist →</a>
       </div>
