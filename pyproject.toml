@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 #   pip install rainman-memory  ->  import rainman  /  $ rainman
 [project]
 name = "rainman-memory"
-version = "0.1.1"
+version = "0.1.2"
 description = "Project memory for AI coding agents — remembers every failure, fix and decision your agent makes, and recalls the right one when the same problem returns. Zero LLM calls, zero dependencies, runs local."
 readme = "README.md"
 license = {text = "MIT"}
