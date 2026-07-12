@@ -135,6 +135,36 @@
   .ghost { font-size: 14.5px; color: var(--ink-2); border-bottom: 1px solid var(--hairline); padding-bottom: 2px; }
   .ghost:hover { color: var(--ink); text-decoration: none; border-color: var(--ink-2); }
 
+  /* ── how it works: three steps right after the hero ── */
+  .how { padding: 0 0 80px; }
+  .steps3 {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 14px; align-items: stretch; margin-top: 18px;
+  }
+  .step3 {
+    background: var(--card); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 22px 20px;
+  }
+  .step3 .k {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--signal); margin: 0 0 10px;
+  }
+  .step3 h3 {
+    font-family: var(--serif); font-size: 19px; font-weight: 600;
+    margin: 0 0 8px; letter-spacing: -0.005em;
+  }
+  .step3 h3 code { font-family: var(--mono); font-size: 14.5px; font-weight: 600; }
+  .step3 p { font-size: 13.5px; color: var(--ink-2); margin: 0; line-height: 1.55; }
+  .step3 p code {
+    font-family: var(--mono); font-size: 12px; background: var(--paper-2);
+    border: 1px solid var(--grid); border-radius: 4px; padding: 1px 6px;
+  }
+  .arrow { align-self: center; font-size: 24px; color: var(--signal); font-weight: 700; }
+  @media (max-width: 760px) {
+    .steps3 { grid-template-columns: 1fr; }
+    .arrow { justify-self: center; transform: rotate(90deg); }
+  }
+
   /* ── the cinema: sticky stage, neuron behind, session in front ── */
   #cinema { height: 440vh; position: relative; }
   .stage { position: sticky; top: 0; height: 100vh; overflow: hidden; }
@@ -316,7 +346,7 @@
   <nav>
     <span class="brand">rain<em>·</em>man</span>
     <div class="navlinks">
-      <a href="#cinema">how it works</a>
+      <a href="#how">how it works</a>
       <a href="#you">the ledger</a>
       <a href="#proof">the evidence</a>
       <a href="#pricing">pricing</a>
@@ -328,10 +358,9 @@
     <p class="eyebrow rise">Project memory for AI coding agents</p>
     <h1 class="rise d1">The problem with your agent’s memory is <em>you</em>.</h1>
     <p class="sub rise d2">
-      Not the model — you. You write up the outage; you never write up the
-      Tuesday-afternoon fix. Whatever you don’t write down, your agent can’t
-      remember. Rainman remembers it for you — <strong>so your agent never
-      solves the same bug twice</strong>. Automatically. Locally. For zero tokens.
+      You write down the big decisions. Nobody writes down the hundred small
+      fixes. Rainman remembers them all, automatically — <strong>so your agent
+      never solves the same bug twice</strong>.
     </p>
     <ul class="jobs rise d2">
       <li>the second time takes seconds, not another hour</li>
@@ -346,6 +375,32 @@
       <a class="ghost" href="#cinema">watch a memory form ↓</a>
     </div>
   </header>
+
+  <section class="how" id="how">
+    <p class="eyebrow">how it works — three steps, no step four</p>
+    <div class="steps3">
+      <div class="step3">
+        <p class="k">1 · install once</p>
+        <h3><code>pip install rainman-memory</code></h3>
+        <p>Then <code>rainman setup</code>. Two minutes, one time — works with
+        Claude Code, Cursor, and any AI coding tool.</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="step3">
+        <p class="k">2 · just work</p>
+        <h3>Rainman takes the notes.</h3>
+        <p>Every bug, fix and decision your agent makes is saved automatically.
+        You never write anything down.</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="step3">
+        <p class="k">3 · next time</p>
+        <h3>The answer is already there.</h3>
+        <p>When the same problem returns, your agent gets the old fix
+        instantly — instead of solving it all over again.</p>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- ── the cinema ── -->
