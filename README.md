@@ -115,7 +115,7 @@ aider --read <(rainman context --format md)
 
 ### Hooks (Claude Code only)
 
-Add to `.claude/settings.json` for automatic memory management:
+Added automatically by `rainman setup` to `.claude/settings.local.json` — the machine-local, git-ignored file, so hook config never rides along in a committed repo. (To wire it by hand:)
 
 ```json
 {

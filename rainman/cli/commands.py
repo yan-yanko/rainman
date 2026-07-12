@@ -636,11 +636,15 @@ def cmd_setup(host=None) -> None:
         print("   Warning: `claude` CLI not found in PATH")
         print(f"   Run manually: claude mcp add rainman -- {python_path} -m rainman serve")
 
-    # Step 3: Configure hooks in .claude/settings.json
+    # Step 3: Configure hooks in .claude/settings.local.json.
+    # settings.local.json is Claude Code's machine-local file (auto-gitignored)
+    # — hook config must never ride along in the committable settings.json,
+    # where a cloned repo could ship auto-executing commands.
     print("\n3. Configuring Claude Code hooks ...")
     claude_dir = os.path.join(project_dir, ".claude")
     os.makedirs(claude_dir, exist_ok=True)
-    settings_path = os.path.join(claude_dir, "settings.json")
+    settings_path = os.path.join(claude_dir, "settings.local.json")
+    legacy_settings_path = os.path.join(claude_dir, "settings.json")
 
     # Use "python" (not sys.executable) because Claude Code runs hooks
     # through /usr/bin/bash which strips Windows backslashes from paths.
@@ -699,6 +703,40 @@ def cmd_setup(host=None) -> None:
         with open(settings_path, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
         print(f"   Done: {settings_path}")
+
+        # Migrate: strip rainman hooks from the COMMITTABLE settings.json
+        # (earlier versions wrote them there). Other settings are untouched.
+        if os.path.exists(legacy_settings_path):
+            with open(legacy_settings_path, encoding="utf-8") as f:
+                legacy = json.load(f)
+            legacy_hooks = legacy.get("hooks", {})
+            changed = False
+            for hook_name in list(legacy_hooks.keys()):
+                pruned = []
+                for entry in legacy_hooks[hook_name]:
+                    kept = [h for h in entry.get("hooks", [])
+                            if "rainman" not in h.get("command", "")]
+                    if kept:
+                        pruned.append({**entry, "hooks": kept})
+                    elif entry.get("hooks") is None:
+                        pruned.append(entry)
+                    else:
+                        changed = True
+                if pruned != legacy_hooks[hook_name]:
+                    changed = True
+                if pruned:
+                    legacy_hooks[hook_name] = pruned
+                else:
+                    del legacy_hooks[hook_name]
+            if changed:
+                if legacy_hooks:
+                    legacy["hooks"] = legacy_hooks
+                else:
+                    legacy.pop("hooks", None)
+                with open(legacy_settings_path, "w", encoding="utf-8") as f:
+                    json.dump(legacy, f, indent=2)
+                print("   Migrated rainman hooks out of the committable "
+                      "settings.json -> settings.local.json")
     except Exception as e:
         errors.append("hooks config")
         print(f"   Warning: could not write hooks config: {e}")
@@ -936,28 +974,38 @@ def cmd_doctor() -> None:
     else:
         _warn(".mcp.json not found — run `rainman setup` to create it")
 
-    # Test 5: Hooks
+    # Test 5: Hooks (settings.local.json is the right home — machine-local,
+    # auto-gitignored; rainman hooks in the committable settings.json get a
+    # warning, since tool-config in git is an auto-execution risk on clone).
     print("\n5. Hooks ...")
-    settings_path = os.path.join(cwd, ".claude", "settings.json")
-    if os.path.exists(settings_path):
-        try:
-            with open(settings_path, encoding="utf-8") as f:
-                settings = json.load(f)
-            hooks = settings.get("hooks", {})
-            hook_count = 0
-            for hook_name, hook_list in hooks.items():
-                for entry in hook_list:
-                    for h in entry.get("hooks", []):
-                        if "rainman" in h.get("command", ""):
-                            hook_count += 1
-            if hook_count > 0:
-                _pass(f"{hook_count} rainman hook(s) configured in .claude/settings.json")
-            else:
-                _warn("no rainman hooks found in .claude/settings.json — run `rainman setup`")
-        except json.JSONDecodeError:
-            _fail(".claude/settings.json is corrupted")
-    else:
-        _warn(".claude/settings.json not found — run `rainman setup` to configure hooks")
+
+    def _count_rainman_hooks(path):
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as f:
+            settings = json.load(f)
+        return sum(
+            1
+            for hook_list in settings.get("hooks", {}).values()
+            for entry in hook_list
+            for h in entry.get("hooks", [])
+            if "rainman" in h.get("command", "")
+        )
+
+    local_path = os.path.join(cwd, ".claude", "settings.local.json")
+    legacy_path = os.path.join(cwd, ".claude", "settings.json")
+    try:
+        local_count = _count_rainman_hooks(local_path)
+        legacy_count = _count_rainman_hooks(legacy_path)
+        if local_count:
+            _pass(f"{local_count} rainman hook(s) in .claude/settings.local.json (machine-local)")
+        if legacy_count:
+            _warn(f"{legacy_count} rainman hook(s) in the COMMITTABLE .claude/settings.json — "
+                  "rerun `rainman setup` to migrate them to settings.local.json")
+        if not local_count and not legacy_count:
+            _warn("no rainman hooks configured — run `rainman setup`")
+    except json.JSONDecodeError:
+        _fail(".claude settings file is corrupted")
 
     # Test 6: Claude CLI
     print("\n6. Claude CLI ...")
