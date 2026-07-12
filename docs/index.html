@@ -160,64 +160,16 @@
     border: 1px solid var(--grid); border-radius: 4px; padding: 1px 6px;
   }
   .arrow { align-self: center; font-size: 24px; color: var(--signal); font-weight: 700; }
+  .why3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
   @media (max-width: 760px) {
-    .steps3 { grid-template-columns: 1fr; }
+    .steps3, .why3 { grid-template-columns: 1fr; }
     .arrow { justify-self: center; transform: rotate(90deg); }
   }
 
-  /* ── the cinema: sticky stage, neuron behind, session in front ── */
-  #cinema { height: 440vh; position: relative; }
-  .stage { position: sticky; top: 0; height: 100vh; overflow: hidden; }
-  #neuron { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .stage-head {
-    position: absolute; top: 26px; left: 0; right: 0; text-align: center; pointer-events: none;
-  }
-  .stage-head .eyebrow { margin: 0 0 6px; }
-  .stage-head h2 { margin: 0; }
   h2 {
     font-family: var(--serif); font-weight: 600; letter-spacing: -0.008em;
     font-size: clamp(26px, 3.6vw, 38px); margin: 8px 0 10px; text-wrap: balance;
   }
-  .chat {
-    position: absolute; left: max(24px, calc(50vw - 530px)); top: 50%;
-    transform: translateY(-50%); width: min(470px, calc(100vw - 48px));
-    background: var(--terminal); border-radius: 12px;
-    box-shadow: 0 24px 70px rgba(11, 16, 34, 0.38);
-    font-family: var(--mono); font-size: 12.5px; color: var(--terminal-ink);
-  }
-  .chat-bar { display: flex; gap: 7px; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); color: var(--terminal-dim); font-size: 11.5px; }
-  .chat-bar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.14); font-style: normal; }
-  .chat-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 330px; }
-  .msg { line-height: 1.55; opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease; }
-  .msg.on { opacity: 1; transform: none; }
-  .msg .who { color: var(--terminal-dim); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: 3px; }
-  .msg.user { border-left: 2px solid rgba(255,255,255,0.18); padding-left: 12px; }
-  .msg.agent { border-left: 2px solid rgba(139,155,224,0.5); padding-left: 12px; }
-  .msg .err { color: #f0908a; }
-  .msg .ok { color: #7fd8ab; }
-  .sys { font-size: 11.5px; color: var(--terminal-dim); }
-  .sys b { color: #8b9be0; font-weight: 500; }
-  .divider { text-align: center; color: var(--terminal-dim); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
-  .divider::before, .divider::after { content: " ··· "; }
-  .recall-card {
-    border-left: 3px solid var(--signal); background: rgba(245, 158, 11, 0.08);
-    border-radius: 0 8px 8px 0; padding: 10px 12px; font-size: 12px;
-  }
-  .recall-card .who { color: var(--signal); }
-  .steps {
-    position: absolute; bottom: 26px; left: 0; right: 0; display: flex; justify-content: center;
-    gap: 8px; padding: 0 24px; pointer-events: none; flex-wrap: wrap;
-  }
-  .step {
-    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
-    border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 14px;
-    background: color-mix(in srgb, var(--paper) 82%, transparent);
-    transition: color .4s, border-color .4s;
-  }
-  .step.on { color: var(--ink); border-color: var(--neural); }
-  .step.fire.on { color: var(--signal); border-color: var(--signal); }
-  .step b { font-weight: 600; }
-
   /* ── sections on paper ── */
   section.sheet { padding: 88px 0; }
   .rule { border: none; border-top: 1px solid var(--hairline); margin: 0; }
@@ -372,7 +324,7 @@
         <code id="pipcmd">pip install rainman-memory</code>
         <button id="copy" type="button" aria-label="Copy install command">copy</button>
       </span>
-      <a class="ghost" href="#cinema">watch a memory form ↓</a>
+      <a class="ghost" href="#proof">see the evidence ↓</a>
     </div>
   </header>
 
@@ -401,60 +353,32 @@
       </div>
     </div>
   </section>
-</div>
 
-<!-- ── the cinema ── -->
-<div id="cinema">
-  <div class="stage">
-    <canvas id="neuron" aria-hidden="true"></canvas>
-    <div class="stage-head">
-      <p class="eyebrow">scroll — this is the science, drawn to scale of one bug</p>
-      <h2>Watch a memory form.</h2>
-    </div>
-
-    <div class="chat" role="figure" aria-label="An agent session while Rainman encodes, links, and later recalls the fix">
-      <div class="chat-bar"><i></i><i></i><i></i>&nbsp; agent session · ~/your-project</div>
-      <div class="chat-body">
-        <div class="msg user" data-beat="0">
-          <span class="who">you</span>
-          prod is timing out again — <span class="err">sqlalchemy TimeoutError:
-          QueuePool limit of size 5 reached</span> in <b>app/db.py</b>. fix it?
-        </div>
-        <div class="msg agent" data-beat="1">
-          <span class="who">agent</span>
-          Pool exhaustion under load. Raised <b>pool_size=20</b>, enabled
-          <b>pool_pre_ping</b>. <span class="ok">✔ 42 tests passed</span>
-        </div>
-        <div class="msg sys" data-beat="1">
-          <b>rainman</b> · post_tool_use hook → failure→fix card stored · salience 0.82 · 0 tokens
-        </div>
-        <div class="msg sys" data-beat="2">
-          <b>rainman</b> · auto-linked → <b>app/db.py</b> · pool · timeout · 2 prior memories
-        </div>
-        <div class="msg divider" data-beat="3">three weeks later · new session · zero context</div>
-        <div class="msg user" data-beat="3">
-          <span class="who">you</span>
-          <span class="err">TimeoutError: QueuePool limit of size 5 reached</span> — again?!
-        </div>
-        <div class="msg recall-card" data-beat="3">
-          <span class="who">rainman · recall(error=…) · rank 1</span>
-          Fix (21d ago): raise pool_size to 20 + pool_pre_ping — app/db.py
-        </div>
-        <div class="msg agent" data-beat="3">
-          <span class="who">agent</span>
-          We solved this on June 12. Applying the known fix.
-          <span class="ok">✔ done in 40 seconds</span>
-        </div>
+  <section class="how" id="everywhere">
+    <p class="eyebrow">one memory, everywhere</p>
+    <div class="why3">
+      <div class="step3">
+        <p class="k">any LLM</p>
+        <h3>No vendor lock-in.</h3>
+        <p>Rainman never talks to a model. Teammates on Claude, GPT or Gemini
+        share the same project memory — it belongs to your repo, not to an
+        AI vendor.</p>
+      </div>
+      <div class="step3">
+        <p class="k">every agent</p>
+        <h3>All your agents, one memory.</h3>
+        <p>Built for many agents working at once — safe concurrent reads and
+        writes to the same store. One agent’s fix becomes every agent’s
+        knowledge.</p>
+      </div>
+      <div class="step3">
+        <p class="k">local &amp; cloud</p>
+        <h3>It travels with the repo.</h3>
+        <p>Memory lives in a <code>.rainman/</code> folder and commits to
+        git — every clone gets it: laptop, cloud dev environment, CI.</p>
       </div>
     </div>
-
-    <div class="steps" aria-hidden="true">
-      <span class="step" data-beat="0"><b>① failure</b> — something breaks</span>
-      <span class="step" data-beat="1"><b>② encoding</b> — the hook stores failure→fix</span>
-      <span class="step" data-beat="2"><b>③ association</b> — linked to files &amp; memories</span>
-      <span class="step fire" data-beat="3"><b>④ retrieval</b> — the error fires it back</span>
-    </div>
-  </div>
+  </section>
 </div>
 
 <div class="wrap">
@@ -678,254 +602,6 @@
       .then(function () { copyBtn.textContent = 'copied'; setTimeout(function () { copyBtn.textContent = 'copy'; }, 1400); })
       .catch(function () { copyBtn.textContent = 'select it'; });
   });
-
-  /* ── tokens (re-read on theme change) ── */
-  function tokens() {
-    var s = getComputedStyle(document.documentElement);
-    return {
-      neural: s.getPropertyValue('--neural').trim(),
-      soft: s.getPropertyValue('--neural-soft').trim(),
-      signal: s.getPropertyValue('--signal').trim(),
-      muted: s.getPropertyValue('--muted').trim()
-    };
-  }
-  var TK = tokens();
-  new MutationObserver(function () { TK = tokens(); drawScene(lastP, true); })
-    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-    TK = tokens(); drawScene(lastP, true);
-  });
-
-  /* ── the neuron: procedural arbor, grown by scroll ── */
-  var canvas = document.getElementById('neuron');
-  var ctx = canvas.getContext('2d');
-  var DPR = Math.min(window.devicePixelRatio || 1, 2);
-  var W = 0, H = 0, NEURON = null;
-
-  function rng(seed) {
-    return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  }
-  function polyline(x, y, angle, len, segs, wobble, rand) {
-    var pts = [{ x: x, y: y }], step = len / segs, a = angle;
-    for (var i = 0; i < segs; i++) {
-      a += (rand() - 0.5) * wobble;
-      x += Math.cos(a) * step * (0.75 + rand() * 0.5);
-      y += Math.sin(a) * step * (0.75 + rand() * 0.5);
-      pts.push({ x: x, y: y });
-    }
-    return pts;
-  }
-  function measure(pts) {
-    var L = 0, cum = [0];
-    for (var i = 1; i < pts.length; i++) {
-      L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-      cum.push(L);
-    }
-    return { len: L, cum: cum };
-  }
-  function build() {
-    var rand = rng(20260703);
-    var sx = W * 0.66, sy = H * 0.44;
-    var branches = [];
-    function grow(x, y, angle, len, depth, t0) {
-      var pts = polyline(x, y, angle, len, 7, 0.55, rand);
-      var m = measure(pts);
-      branches.push({ pts: pts, cum: m.cum, len: m.len, w: 0.9 + depth * 0.85, t0: t0, t1: t0 + 0.3 });
-      if (depth > 0) {
-        var kids = 2 + (rand() > 0.6 ? 1 : 0);
-        for (var k = 0; k < kids; k++) {
-          var at = pts[4 + Math.floor(rand() * 3)];
-          grow(at.x, at.y, angle + (rand() - 0.5) * 1.5, len * 0.55, depth - 1, t0 + 0.22 + rand() * 0.1);
-        }
-      }
-    }
-    for (var i = 0; i < 7; i++) {
-      var a = -2.6 + i * 0.62 + (rand() - 0.5) * 0.25;
-      grow(sx, sy, a, Math.min(W, H) * 0.2, 2, rand() * 0.12);
-    }
-    /* axon: soma → toward the session card (retrieval path) */
-    var axPts = [{ x: sx, y: sy }];
-    var tx = Math.max(W * 0.42, 340), ty = H * 0.6;
-    var steps = 26;
-    for (var j = 1; j <= steps; j++) {
-      var u = j / steps;
-      var mx = sx + (tx - sx) * u, my = sy + (ty - sy) * u;
-      var sway = Math.sin(u * Math.PI * 2.2) * H * 0.05 * (1 - u);
-      axPts.push({ x: mx, y: my + sway });
-    }
-    var am = measure(axPts);
-    /* prior memory nodes + association edges */
-    var nodes = [
-      { x: W * 0.87, y: H * 0.7, label: 'app/db.py · pool tuning' },
-      { x: W * 0.83, y: H * 0.2, label: 'failure · request timeout' }
-    ];
-    var edges = nodes.map(function (n) {
-      var pts = [], stepsE = 18;
-      for (var e = 0; e <= stepsE; e++) {
-        var u2 = e / stepsE;
-        var cx = (sx + n.x) / 2 + (n.y - sy) * 0.14, cy = (sy + n.y) / 2 - (n.x - sx) * 0.14;
-        var x1 = (1 - u2) * (1 - u2) * sx + 2 * (1 - u2) * u2 * cx + u2 * u2 * n.x;
-        var y1 = (1 - u2) * (1 - u2) * sy + 2 * (1 - u2) * u2 * cy + u2 * u2 * n.y;
-        pts.push({ x: x1, y: y1 });
-      }
-      var mm = measure(pts);
-      return { pts: pts, cum: mm.cum, len: mm.len };
-    });
-    NEURON = { sx: sx, sy: sy, branches: branches, axon: { pts: axPts, cum: am.cum, len: am.len }, nodes: nodes, edges: edges };
-  }
-
-  function partial(b, frac) {
-    if (frac <= 0) return null;
-    var target = b.len * Math.min(1, frac), pts = [b.pts[0]];
-    for (var i = 1; i < b.pts.length; i++) {
-      if (b.cum[i] <= target) { pts.push(b.pts[i]); continue; }
-      var seg = b.cum[i] - b.cum[i - 1];
-      var t = (target - b.cum[i - 1]) / seg;
-      pts.push({ x: b.pts[i - 1].x + (b.pts[i].x - b.pts[i - 1].x) * t,
-                 y: b.pts[i - 1].y + (b.pts[i].y - b.pts[i - 1].y) * t });
-      break;
-    }
-    return pts;
-  }
-  function stroke(pts, w, color, alpha) {
-    if (!pts || pts.length < 2) return;
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = w;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.globalAlpha = 1;
-  }
-  function at(b, frac) {
-    var target = b.len * Math.max(0, Math.min(1, frac));
-    for (var i = 1; i < b.pts.length; i++) {
-      if (b.cum[i] >= target) {
-        var t = (target - b.cum[i - 1]) / (b.cum[i] - b.cum[i - 1] || 1);
-        return { x: b.pts[i - 1].x + (b.pts[i].x - b.pts[i - 1].x) * t,
-                 y: b.pts[i - 1].y + (b.pts[i].y - b.pts[i - 1].y) * t };
-      }
-    }
-    return b.pts[b.pts.length - 1];
-  }
-  function ease(x) { return x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); }
-
-  var lastP = -1;
-  function drawScene(p, force) {
-    if (!NEURON) return;
-    if (!force && Math.abs(p - lastP) < 0.0005) return;
-    lastP = p;
-    ctx.clearRect(0, 0, W, H);
-
-    var g = ease((p - 0.04) / 0.5);            /* arbor growth: beats ①–② */
-    var glow = ease((p - 0.26) / 0.2);          /* soma consolidates */
-    var assoc = ease((p - 0.46) / 0.2);         /* beat ③ links */
-    var pulse = (p - 0.72) / 0.2;               /* beat ④ retrieval sweep */
-
-    /* dendritic arbor */
-    NEURON.branches.forEach(function (b) {
-      var f = ease((g - b.t0) / (b.t1 - b.t0));
-      stroke(partial(b, f), b.w, TK.neural, 0.34 + 0.3 * f);
-    });
-
-    /* soma */
-    if (g > 0.05) {
-      var r = 7 + 6 * glow;
-      var grad = ctx.createRadialGradient(NEURON.sx, NEURON.sy, 1, NEURON.sx, NEURON.sy, r * 3.4);
-      grad.addColorStop(0, TK.signal); grad.addColorStop(1, 'rgba(0,0,0,0)');
-      if (glow > 0) { ctx.globalAlpha = 0.22 * glow; ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(NEURON.sx, NEURON.sy, r * 3.4, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-      ctx.beginPath(); ctx.arc(NEURON.sx, NEURON.sy, r, 0, 7);
-      ctx.fillStyle = TK.neural; ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
-    }
-
-    /* association edges + prior nodes */
-    if (assoc > 0) {
-      NEURON.edges.forEach(function (e, i) {
-        stroke(partial(e, assoc), 1.2, TK.neural, 0.5);
-        var n = NEURON.nodes[i];
-        ctx.beginPath(); ctx.arc(n.x, n.y, 5.5, 0, 7);
-        ctx.fillStyle = TK.neural; ctx.globalAlpha = 0.35 + 0.4 * assoc; ctx.fill(); ctx.globalAlpha = 1;
-        if (assoc > 0.85) {
-          ctx.font = '11px ' + '"JetBrains Mono", ui-monospace, monospace';
-          ctx.fillStyle = TK.muted; ctx.globalAlpha = (assoc - 0.85) / 0.15;
-          ctx.textAlign = n.x > W * 0.5 ? 'end' : 'start';
-          ctx.fillText(n.label, n.x + (n.x > W * 0.5 ? -12 : 12), n.y + 4);
-          ctx.globalAlpha = 1;
-        }
-      });
-    }
-
-    /* retrieval: axon draws + amber impulse travels soma → session */
-    if (pulse > -0.35) {
-      var axDraw = ease((p - 0.62) / 0.12);
-      stroke(partial(NEURON.axon, axDraw), 2, TK.neural, 0.55);
-      if (pulse > 0 && pulse <= 1.15) {
-        var u = Math.min(1, pulse);
-        var pt = at(NEURON.axon, u);
-        var pg = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 26);
-        pg.addColorStop(0, TK.signal); pg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.globalAlpha = 0.8; ctx.fillStyle = pg;
-        ctx.beginPath(); ctx.arc(pt.x, pt.y, 26, 0, 7); ctx.fill();
-        ctx.globalAlpha = 1; ctx.fillStyle = TK.signal;
-        ctx.beginPath(); ctx.arc(pt.x, pt.y, 4.5, 0, 7); ctx.fill();
-        /* trailing shimmer */
-        for (var s = 1; s <= 4; s++) {
-          var tu = u - s * 0.045; if (tu <= 0) break;
-          var tp = at(NEURON.axon, tu);
-          ctx.globalAlpha = 0.35 / s; ctx.fillStyle = TK.signal;
-          ctx.beginPath(); ctx.arc(tp.x, tp.y, 3, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
-        }
-        /* arrival ripple at the session card */
-        if (u > 0.96) {
-          var end = at(NEURON.axon, 1), rr = 10 + (pulse - 0.96) * 240;
-          ctx.beginPath(); ctx.arc(end.x, end.y, rr, 0, 7);
-          ctx.strokeStyle = TK.signal; ctx.globalAlpha = Math.max(0, 0.5 - (pulse - 0.96) * 2.4);
-          ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
-        }
-      }
-    }
-  }
-
-  function resize() {
-    var stage = document.querySelector('.stage');
-    W = stage.clientWidth; H = stage.clientHeight;
-    canvas.width = W * DPR; canvas.height = H * DPR;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    build(); drawScene(lastP < 0 ? 0 : lastP, true);
-  }
-  window.addEventListener('resize', resize);
-
-  /* ── the scroll engine ── */
-  var cinema = document.getElementById('cinema');
-  var msgs = document.querySelectorAll('.msg');
-  var steps = document.querySelectorAll('.step');
-  var BEAT_AT = [0, 0.26, 0.5, 0.68];
-  function setBeat(p) {
-    var beat = 0;
-    for (var i = 0; i < BEAT_AT.length; i++) if (p >= BEAT_AT[i]) beat = i;
-    msgs.forEach(function (m) { m.classList.toggle('on', +m.dataset.beat <= beat); });
-    steps.forEach(function (s) { s.classList.toggle('on', +s.dataset.beat === beat); });
-  }
-  var ticking = false;
-  function onScroll() {
-    if (ticking) return; ticking = true;
-    requestAnimationFrame(function () {
-      ticking = false;
-      var r = cinema.getBoundingClientRect();
-      var total = cinema.offsetHeight - window.innerHeight;
-      var p = total > 0 ? Math.max(0, Math.min(1, -r.top / total)) : 1;
-      setBeat(p); drawScene(p);
-    });
-  }
-
-  if (REDUCED) {
-    /* no cinema: show the finished figure, everything visible */
-    cinema.style.height = '100vh';
-    resize(); drawScene(1, true); setBeat(1);
-    msgs.forEach(function (m) { m.classList.add('on'); });
-  } else {
-    resize();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-  }
 
   /* ── Fig. 1 ── */
   var DIL = [0, 33, 67, 100];
