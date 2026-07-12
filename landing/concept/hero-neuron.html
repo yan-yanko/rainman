@@ -3,13 +3,18 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="Rainman is project memory for AI coding agents. It remembers every failure, fix and decision your agents make — and recalls the right one the moment the same problem returns. Zero LLM calls, zero dependencies, runs local. Free and open-source." />
+<meta name="description" content="Rainman is project memory for AI coding agents. It captures the routine fixes and decisions that usually disappear between sessions — and brings them back the moment the problem returns. Zero LLM calls, zero dependencies, runs local. Free and open-source." />
 <meta property="og:title" content="Rainman — your agents never solve the same bug twice" />
-<meta property="og:description" content="Project memory for AI coding agents. Remembers what failed, what fixed it, what your team decided — and surfaces it when the same problem returns. Zero LLM calls. Runs local. Free & open-source." />
+<meta property="og:description" content="Project memory for AI coding agents. Captures the fixes and decisions that vanish between sessions, and surfaces them when the problem returns. Zero LLM calls. Runs local. Free & open-source." />
 <meta property="og:type" content="website" />
+<meta property="og:url" content="https://yan-yanko.github.io/rainman/" />
+<meta property="og:image" content="https://yan-yanko.github.io/rainman/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
-<title>Rainman — the problem with your agent’s memory is you</title>
+<meta name="twitter:image" content="https://yan-yanko.github.io/rainman/og.png" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%231b2237'/%3E%3Cpath d='M50 20 C50 20 29 47 29 62 a21 21 0 0 0 42 0 C71 47 50 20 50 20 Z' fill='%23d97706'/%3E%3C/svg%3E" />
+<title>Rainman — project memory for AI coding agents</title>
 <style>
   /* ── tokens: a lucid lab notebook. Light = ink on cool paper (Cajal),
        dark = the same neuron, bioluminescent. Theme via tokens only. ── */
@@ -112,7 +117,7 @@
     font-size: clamp(40px, 6.4vw, 72px); line-height: 1.06;
     margin: 0; max-width: 21ch; text-wrap: balance;
   }
-  h1 em { font-style: italic; color: var(--neural); }
+  h1 em, h2 em { font-style: italic; color: var(--neural); }
   .sub { margin: 26px 0 0; max-width: 58ch; font-size: 18px; color: var(--ink-2); }
   .sub strong { color: var(--ink); }
   .jobs { display: flex; flex-direction: column; gap: 9px; margin: 26px 0 0; padding: 0; list-style: none; }
@@ -134,6 +139,62 @@
   .pip button:hover { filter: brightness(1.08); }
   .ghost { font-size: 14.5px; color: var(--ink-2); border-bottom: 1px solid var(--hairline); padding-bottom: 2px; }
   .ghost:hover { color: var(--ink); text-decoration: none; border-color: var(--ink-2); }
+  .trust {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em;
+    color: var(--muted); margin: 22px 0 0;
+  }
+
+  /* ── terminal demo: one bug, two sessions ── */
+  .dcard {
+    background: var(--terminal); border-radius: 12px; margin-top: 16px;
+    box-shadow: 0 22px 60px rgba(11, 16, 34, 0.35); overflow: hidden;
+  }
+  .dbar {
+    display: flex; align-items: center; gap: 7px; padding: 11px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    font-family: var(--mono); font-size: 11.5px; color: var(--terminal-dim);
+  }
+  .dbar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.14); }
+  .dbar span { margin-left: 8px; }
+  .dbar button {
+    margin-left: auto; font-family: var(--mono); font-size: 11px; cursor: pointer;
+    background: transparent; color: var(--terminal-dim);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 10px;
+  }
+  .dbar button:hover { color: var(--terminal-ink); border-color: rgba(255,255,255,0.35); }
+  .dterm {
+    padding: 18px 20px 20px; font-family: var(--mono); font-size: 12.5px;
+    line-height: 1.75; color: var(--terminal-ink); min-height: 300px;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  .dl { display: block; }
+  .dl-dim { color: var(--terminal-dim); }
+  .dl-err { color: #f0908a; }
+  .dl-ok { color: #7fd8ab; }
+  .dl-rm { color: #f5b04b; }
+  .dl-agent { color: #8b9be0; }
+  .dl-gap { height: 14px; }
+  .dcursor { display: inline-block; width: 7px; height: 14px; background: var(--terminal-ink);
+    vertical-align: -2px; animation: dblink 0.9s steps(1) infinite; }
+  @keyframes dblink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .dcursor { animation: none; } }
+
+  /* ── integration reality (what automatic means per tool) ── */
+  .integ {
+    margin-top: 16px; border: 1px dashed var(--hairline); border-radius: 10px;
+    padding: 16px 18px; background: color-mix(in srgb, var(--card) 55%, transparent);
+  }
+  .integ-title {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+  }
+  .integ-row { display: flex; gap: 14px; align-items: baseline; padding: 4px 0; font-size: 13px; }
+  .integ-row b { flex: 0 0 220px; color: var(--ink); font-weight: 600; }
+  .integ-row span { color: var(--ink-2); }
+  @media (max-width: 640px) {
+    .integ-row { flex-direction: column; gap: 1px; }
+    .integ-row b { flex: none; }
+  }
 
   /* ── how it works: three steps right after the hero ── */
   .how { padding: 0 0 80px; }
@@ -264,6 +325,9 @@
     text-transform: uppercase; color: var(--muted);
     border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 15px; margin: 0;
   }
+  .soon-line { font-size: 13.5px; color: var(--ink-2); margin: 0; max-width: 30ch; }
+  .wait { font-family: var(--mono); font-size: 12px; color: var(--blueink); }
+  @media (max-width: 640px) { .navlinks { gap: 14px; } .navlinks a:not(.gh) { display: none; } }
 
   /* ── independent-signal pull quote ── */
   .pullquote { margin: 0; border-left: 3px solid var(--signal); padding: 4px 0 4px 26px; max-width: 62ch; }
@@ -300,18 +364,18 @@
       <a href="#you">the ledger</a>
       <a href="#proof">the evidence</a>
       <a href="#pricing">pricing</a>
-      <a href="https://github.com/yan-yanko/rainman">GitHub</a>
+      <a class="gh" href="https://github.com/yan-yanko/rainman">GitHub</a>
     </div>
   </nav>
 
   <header class="hero">
     <p class="eyebrow rise">Project memory for AI coding agents</p>
-    <h1 class="rise d1">The problem with your agent’s memory is <em>you</em>.</h1>
+    <h1 class="rise d1">Your coding agents keep solving the same bugs <em>twice</em>.</h1>
     <p class="sub rise d2">
-      You write down the big decisions. Nobody writes down the hundred small
-      fixes — <strong>until now</strong>. Meet Rainman: it remembers them all,
-      automatically, so <strong>your agents never solve the same bug
-      twice</strong>.
+      You write down the big decisions; the hundred small fixes vanish —
+      <strong>until now</strong>. Rainman captures the routine fixes and
+      decisions that usually disappear between sessions, and
+      <strong>brings them back the moment the problem returns</strong>.
     </p>
     <ul class="jobs rise d2">
       <li>the second time takes seconds, not another hour</li>
@@ -323,9 +387,22 @@
         <code id="pipcmd">pip install rainman-memory</code>
         <button id="copy" type="button" aria-label="Copy install command">copy</button>
       </span>
-      <a class="ghost" href="#proof">see the evidence ↓</a>
+      <a class="ghost" href="#demo">watch it work ↓</a>
     </div>
+    <p class="trust rise d3">local by default · MIT · 340 tests · zero dependencies ·
+      secrets redacted · every memory has provenance</p>
   </header>
+
+  <section class="how" id="demo">
+    <p class="eyebrow">the aha moment — one bug, two sessions, three weeks apart</p>
+    <div class="dcard">
+      <div class="dbar"><i></i><i></i><i></i>
+        <span>~/your-project</span>
+        <button id="dreplay" type="button">↻ replay</button>
+      </div>
+      <div class="dterm" id="dterm" aria-label="Terminal demo: a bug fixed today is recalled instantly when it returns three weeks later"></div>
+    </div>
+  </section>
 
   <section class="how" id="how">
     <p class="eyebrow">how it works — three steps, no step four</p>
@@ -340,8 +417,8 @@
       <div class="step3">
         <p class="k">2 · just work</p>
         <h3>Rainman takes the notes.</h3>
-        <p>Every bug, fix and decision your agents make is saved automatically.
-        You never write anything down.</p>
+        <p>Rainman captures the routine fixes and decisions that usually
+        disappear between sessions — you never write anything down.</p>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="step3">
@@ -377,6 +454,12 @@
         git — every clone gets it: laptop, cloud dev environment, CI.</p>
       </div>
     </div>
+    <div class="integ">
+      <p class="integ-title">what “automatic” means in your tool</p>
+      <div class="integ-row"><b>Claude Code</b><span>fully automatic — lifecycle hooks learn as you work</span></div>
+      <div class="integ-row"><b>Cursor · VS Code · Windsurf</b><span>MCP recall + shared project memory</span></div>
+      <div class="integ-row"><b>any editor</b><span>git-based auto-learning via a post-commit hook</span></div>
+    </div>
   </section>
 </div>
 
@@ -385,11 +468,12 @@
 
   <section class="sheet" id="you">
     <p class="eyebrow">the ledger — why notes and CLAUDE.md aren’t enough</p>
-    <h2>An honest week in your repo.</h2>
+    <h2>The problem with your agent’s memory is <em>you</em>.</h2>
     <p class="lede">
-      Nine things broke and got fixed. You wrote up the outage and one decision —
-      of course you did. The other seven live only in the right-hand column,
-      which is the one your agents read from next week:
+      An honest week in your repo: nine things broke and got fixed. You wrote
+      up the outage and one decision — of course you did. The other seven live
+      only in the right-hand column, which is the one your agents read from
+      next week:
     </p>
     <div class="log">
       <div class="log-scroll">
@@ -481,8 +565,8 @@
     </p>
     <div class="figure">
       <p class="fig-no">Fig. 1 — lazy-notes bench</p>
-      <p class="fig-title">Old fix surfaced when the error recurred (top-5)</p>
-      <p class="fig-sub">by how often you actually write down routine fixes</p>
+      <p class="fig-title">12/12 recurring incidents surfaced in our reproducible local benchmark</p>
+      <p class="fig-sub">old fix in the top-5 when its error recurred — by how often you write down routine fixes</p>
       <div class="legend">
         <span><span class="sw" style="background:var(--chart-a)"></span>Rainman — auto-learned store, 60 junk cards included</span>
         <span><span class="sw" style="background:var(--chart-b)"></span>grep your notes — curated, noise-free file</span>
@@ -494,7 +578,7 @@
         curated and noise-free while Rainman’s store carries 60 auto-learn junk cards;
         result holds at 200. The honest part: at 100% diligence it’s a tie — the
         advantage is <em>coverage, not ranking</em>. Nobody keeps 100% diligence.
-        Reproduce: <a href="https://github.com/yan-yanko/rainman">eval/local_demo/lazy_notes_bench.py</a>.
+        Reproduce: <a href="https://github.com/yan-yanko/rainman/blob/main/eval/local_demo/lazy_notes_bench.py">eval/local_demo/lazy_notes_bench.py</a>.
       </p>
     </div>
   </section>
@@ -553,18 +637,22 @@
 
       <div class="tier soon">
         <p class="tier-name">Pro</p>
+        <p class="soon-line">Your memory, synced across all your machines.</p>
         <p class="soon-tag">Coming soon</p>
+        <a class="wait" href="mailto:yanko1984@gmail.com?subject=Rainman%20Pro%20waitlist">join the waitlist →</a>
       </div>
 
       <div class="tier soon">
         <p class="tier-name">Team</p>
+        <p class="soon-line">Shared team memory — one dev’s fix, every agent’s knowledge.</p>
         <p class="soon-tag">Coming soon</p>
+        <a class="wait" href="mailto:yanko1984@gmail.com?subject=Rainman%20Team%20waitlist">join the waitlist →</a>
       </div>
     </div>
   </section>
 
   <footer>
-    <span class="brand">rain<em>·</em>man</span> — project memory for AI coding agents · hero concept mockup
+    <span class="brand">rain<em>·</em>man</span> — project memory for AI coding agents · MIT · built in the open
   </footer>
 </div>
 
@@ -582,6 +670,70 @@
       .then(function () { copyBtn.textContent = 'copied'; setTimeout(function () { copyBtn.textContent = 'copy'; }, 1400); })
       .catch(function () { copyBtn.textContent = 'select it'; });
   });
+
+  /* ── terminal demo player ── */
+  var DLINES = [
+    ['dim',   '── session 1 · monday 09:14 ─────────────────────────'],
+    ['cmd',   '$ pytest'],
+    ['err',   'FAILED test_checkout — TimeoutError: QueuePool limit of size 5 reached'],
+    ['agent', '▸ agent  pool exhausted under load → pool_size=20, pool_pre_ping=True'],
+    ['ok',    '✔ 42 passed'],
+    ['rm',    '◦ rainman  stored failure→fix card · 0 tokens'],
+    ['gap',   ''],
+    ['dim',   '── session 2 · three weeks later · new session, zero context ──'],
+    ['cmd',   '$ pytest'],
+    ['err',   'FAILED test_checkout — TimeoutError: QueuePool limit of size 5 reached'],
+    ['rm',    '◦ rainman  recall(error) → #1 “pool_size=20 + pool_pre_ping” · stored 21 days ago'],
+    ['agent', '▸ agent  we solved this on June 12 — applying the known fix'],
+    ['ok',    '✔ 42 passed · 40 seconds, not another hour']
+  ];
+  var dterm = document.getElementById('dterm');
+  var dplaying = false;
+  var DREDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function drender(instant) {
+    if (dplaying) return; dplaying = true;
+    dterm.innerHTML = '';
+    var i = 0;
+    function addLine() {
+      if (i >= DLINES.length) {
+        dplaying = false;
+        var c = document.createElement('span'); c.className = 'dcursor';
+        dterm.appendChild(c);
+        return;
+      }
+      var kind = DLINES[i][0], text = DLINES[i][1];
+      var el = document.createElement('span');
+      el.className = 'dl' + (kind === 'cmd' ? '' : ' dl-' + kind);
+      dterm.appendChild(el);
+      i++;
+      if (instant) { el.textContent = text; addLine(); return; }
+      if (kind === 'cmd') {
+        var j = 0;
+        (function typeChar() {
+          el.textContent = text.slice(0, ++j);
+          if (j < text.length) setTimeout(typeChar, 40);
+          else setTimeout(addLine, 420);
+        })();
+      } else {
+        el.textContent = text;
+        setTimeout(addLine, kind === 'gap' ? 550 : (kind === 'rm' ? 900 : 480));
+      }
+    }
+    addLine();
+  }
+  if (dterm) {
+    if (DREDUCED) { drender(true); }
+    else if ('IntersectionObserver' in window) {
+      var dio = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (e.isIntersecting) { dio.disconnect(); drender(false); }
+        });
+      }, { threshold: 0.35 });
+      dio.observe(dterm);
+    } else { drender(true); }
+    var drep = document.getElementById('dreplay');
+    if (drep) drep.addEventListener('click', function () { drender(DREDUCED); });
+  }
 
   /* ── Fig. 1 ── */
   var DIL = [0, 33, 67, 100];
