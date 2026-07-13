@@ -329,6 +329,36 @@
   .wait { font-family: var(--mono); font-size: 12px; color: var(--blueink); }
   @media (max-width: 640px) { .navlinks { gap: 14px; } .navlinks a:not(.gh) { display: none; } }
 
+  /* ── comparison table ── */
+  .cmp thead th { text-align: left; white-space: nowrap; }
+  .cmp thead th.hl, .cmp td.hl { background: var(--signal-soft); }
+  .cmp td.hl { font-weight: 500; color: var(--ink); }
+  .cmp td.dim { font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+  .cmp td { font-size: 13px; }
+  .cmp { min-width: 900px; }
+
+  /* ── faq accordions (native details/summary, no JS) ── */
+  .faq { border-top: 1px solid var(--hairline); margin-top: 8px; }
+  .faq details { border-bottom: 1px solid var(--hairline); }
+  .faq summary {
+    cursor: pointer; list-style: none; padding: 18px 34px 18px 2px;
+    font-family: var(--serif); font-size: 17.5px; font-weight: 600;
+    position: relative; letter-spacing: -0.005em;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: "+"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    font-family: var(--mono); font-size: 18px; color: var(--signal);
+  }
+  .faq details[open] summary::after { content: "–"; }
+  .faq details p { margin: 0 0 20px; padding-right: 34px; font-size: 14.5px;
+    color: var(--ink-2); max-width: 72ch; line-height: 1.65; }
+  .faq details code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--paper-2);
+    border: 1px solid var(--grid); border-radius: 4px; padding: 1px 6px;
+  }
+
   /* ── footer ── */
   footer { padding: 44px 0 70px; color: var(--muted); font-size: 12.5px; }
   footer .brand { font-size: 15px; }
@@ -355,6 +385,7 @@
       <a href="#you">the ledger</a>
       <a href="#proof">the evidence</a>
       <a href="#pricing">pricing</a>
+      <a href="#faq">q&amp;a</a>
       <a class="gh" href="https://github.com/yan-yanko/rainman">GitHub</a>
     </div>
   </nav>
@@ -583,6 +614,95 @@
     </div>
   </section>
 
+  <hr class="rule" />
+
+  <section class="sheet" id="compare">
+    <p class="eyebrow">how it compares</p>
+    <h2>Different tools, different trade-offs.</h2>
+    <p class="lede">
+      Every approach below genuinely works for someone. Here is where each one
+      spends and saves — so you can pick honestly.
+    </p>
+    <div class="log">
+      <div class="log-scroll">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="hl">Rainman</th>
+            <th>notes / CLAUDE.md</th>
+            <th>claude-mem</th>
+            <th>cloud memory APIs</th>
+            <th>vendor built-in memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="dim">how memories get captured</td>
+            <td class="hl">automatically, from your agents’ work (hooks / MCP / git)</td>
+            <td>you write them by hand</td>
+            <td>AI compresses each session</td>
+            <td>API calls you wire in</td>
+            <td>automatic, inside one vendor</td>
+          </tr>
+          <tr>
+            <td class="dim">cost to remember</td>
+            <td class="hl">zero — no LLM calls, no API</td>
+            <td>free (your discipline)</td>
+            <td>LLM tokens per session</td>
+            <td>paid API + tokens</td>
+            <td>bundled, vendor-priced</td>
+          </tr>
+          <tr>
+            <td class="dim">where your data lives</td>
+            <td class="hl">plain files in your repo</td>
+            <td>plain files in your repo</td>
+            <td>local embeddings DB</td>
+            <td>their cloud</td>
+            <td>vendor’s cloud</td>
+          </tr>
+          <tr>
+            <td class="dim">tied to one AI vendor?</td>
+            <td class="hl">no — MCP + git hook, any LLM</td>
+            <td>no</td>
+            <td>several agents supported</td>
+            <td>no (via their SDK)</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td class="dim">recalls the fix by error signature</td>
+            <td class="hl">yes — failure→fix cards, error-conditioned recall</td>
+            <td>grep, if you wrote it down</td>
+            <td>summary recap</td>
+            <td>semantic search</td>
+            <td>opaque</td>
+          </tr>
+          <tr>
+            <td class="dim">retrieval you can audit</td>
+            <td class="hl">deterministic math + reproducible benchmark</td>
+            <td>ctrl-F</td>
+            <td>embeddings</td>
+            <td>embeddings / LLM</td>
+            <td>no visibility</td>
+          </tr>
+          <tr>
+            <td class="dim">runtime dependencies</td>
+            <td class="hl">zero — Python stdlib</td>
+            <td>none</td>
+            <td>Node + vector store</td>
+            <td>SDK + service</td>
+            <td>n/a</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <p class="footnote">Based on each project’s public documentation, July 2026.
+      These are different jobs more than competing products — session recap,
+      hosted memory platforms and project-local recall can coexist. Corrections
+      welcome — <a href="https://github.com/yan-yanko/rainman/issues">open an issue</a>.</p>
+  </section>
+
       <hr class="rule" />
 
   <section class="sheet" id="pricing">
@@ -621,6 +741,88 @@
         <p class="soon-tag">Coming soon</p>
         <a class="wait" href="mailto:yanko1984@gmail.com?subject=Rainman%20Team%20waitlist">join the waitlist →</a>
       </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet" id="faq">
+    <p class="eyebrow">q &amp; a — real questions from the first week</p>
+    <h2>Asked by actual developers.</h2>
+    <div class="faq">
+      <details>
+        <summary>Does it work with Cursor / VS Code / Windsurf — or only Claude Code?</summary>
+        <p>Both, differently. Claude Code gets the fully automatic experience
+        (lifecycle hooks learn as you work). MCP editors — Cursor, VS Code,
+        Windsurf, Zed — get the same shared memory through the standard
+        <code>recall</code>/<code>remember</code> tools (<code>rainman setup
+        --host cursor</code> writes the config). Any other editor can auto-learn
+        through a git post-commit hook.</p>
+      </details>
+      <details>
+        <summary>What if teammates use different LLMs — Claude, GPT, Gemini?</summary>
+        <p>That’s the core design. Rainman never talks to a model: memory is
+        plain files ranked with plain math, exposed over MCP. Teammates on
+        different AI tools read and write the same project memory. It belongs
+        to your repo, not to an AI vendor.</p>
+      </details>
+      <details>
+        <summary>We work locally and in the cloud. Does memory follow?</summary>
+        <p>Project memory lives in a <code>.rainman/</code> folder and commits
+        to git — so every clone has it: laptop, cloud dev environment, CI. Your
+        <em>personal</em> cross-project memory doesn’t ride in any repo; syncing
+        that across machines is the upcoming Pro plan.</p>
+      </details>
+      <details>
+        <summary>Can several agents use it at the same time?</summary>
+        <p>Yes — the store is built for concurrent access (file locking, atomic
+        writes), so parallel agents on one project read and write safely. One
+        nuance: agents pick up new memories when they start a session or recall —
+        it’s a shared notebook, not a live broadcast into a mid-conversation
+        agent.</p>
+      </details>
+      <details>
+        <summary>Hooks run automatically. Why should I trust that?</summary>
+        <p>Fair question — hooks are code that runs on your machine. What we do
+        about it: the hook config is written to <code>settings.local.json</code>
+        (machine-local, never committed — since v0.1.2), the hooks themselves are
+        small open-source adapters with zero dependencies beyond Python’s
+        stdlib, and releases are Sigstore-signed with an SBOM. Don’t want hooks
+        at all? Run MCP-only: <code>claude mcp add rainman -- python -m rainman
+        serve</code> gives recall/remember with no automatic execution.</p>
+      </details>
+      <details>
+        <summary>Does any of my code or data leave my machine?</summary>
+        <p>Rainman makes no LLM calls and no network calls — you control what’s
+        committed and pushed. Auto-learned content passes secret redaction
+        (pattern-based — honest caveat: patterns aren’t perfect), sensitive
+        paths are skipped, and org policy can enforce extra redaction and path
+        denylists that projects can’t override. For client-sensitive repos you
+        can disable auto-learn entirely and add memories manually.</p>
+      </details>
+      <details>
+        <summary>Won’t the memory fill up with junk over time?</summary>
+        <p>That’s the failure mode we engineered against: a salience gate keeps
+        trivia out at write time, near-duplicates merge, unrecalled noise decays
+        (<code>rainman consolidate</code>), the store is capped, and recall has a
+        relevance floor — if nothing relevant exists, it returns nothing rather
+        than confident noise.</p>
+      </details>
+      <details>
+        <summary>Is this production-mature?</summary>
+        <p>It’s v0.1.x from a solo developer — early, and we won’t pretend
+        otherwise. What you get today: 300+ tests, a published threat model,
+        signed releases, and a reproducible benchmark. Our own advice: try it on
+        a non-sensitive repo first, and judge it by what it recalls in week two.</p>
+      </details>
+      <details>
+        <summary>Why not just keep a MEMORY.md and grep it?</summary>
+        <p>Genuinely fine — if you keep writing it. Our benchmark’s honest
+        finding: grep over notes retrieves what you wrote nearly perfectly; its
+        ceiling is what you wrote down, and at realistic discipline that was 25%
+        of recurring incidents vs 12/12 for auto-capture. The advantage isn’t
+        smarter search — it’s that nobody has to remember to write.</p>
+      </details>
     </div>
   </section>
 
