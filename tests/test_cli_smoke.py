@@ -136,3 +136,47 @@ class TestCLISmoke:
         r = _run_cli(["links", "auth.py"], cwd)
         assert r.returncode == 0
         assert "JWT" in r.stdout or "auth" in r.stdout
+
+
+@pytest.mark.unit
+class TestSetupWritesLocalSettings:
+    """Hooks must land in the machine-local settings.local.json, never the
+    committable settings.json (tool-config in git = auto-execution on clone).
+    Old installs get migrated."""
+
+    def test_setup_targets_local_and_migrates_legacy(self, tmp_path, monkeypatch):
+        import json
+        from rainman.cli import commands
+
+        project = tmp_path / "proj"
+        claude = project / ".claude"
+        claude.mkdir(parents=True)
+        # A legacy install: rainman hook + an unrelated user hook in settings.json
+        legacy = {
+            "hooks": {
+                "SessionStart": [
+                    {"matcher": "", "hooks": [
+                        {"type": "command", "command": "python -m rainman.hooks.session_start"}]},
+                    {"matcher": "", "hooks": [
+                        {"type": "command", "command": "echo keep-me"}]},
+                ]
+            },
+            "model": "opus",
+        }
+        (claude / "settings.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda *_: None)  # no claude CLI
+        monkeypatch.chdir(project)
+        commands.cmd_setup(host="claude")
+
+        local = json.loads((claude / "settings.local.json").read_text(encoding="utf-8"))
+        joined = json.dumps(local)
+        assert "rainman.hooks.session_start" in joined
+        assert "rainman.hooks.post_tool_use" in joined
+
+        migrated = json.loads((claude / "settings.json").read_text(encoding="utf-8"))
+        mjoined = json.dumps(migrated)
+        assert "rainman" not in mjoined          # stripped from committable file
+        assert "keep-me" in mjoined              # unrelated hook preserved
+        assert migrated["model"] == "opus"       # unrelated settings preserved
