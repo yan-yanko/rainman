@@ -859,6 +859,16 @@ class RainmanEngine:
         by_id = {m.id: m for m in self._memories}
         return [by_id[i] for i in ids if i in by_id]
 
+    def gaps(self, limit: int = 10, min_cluster: int = 2) -> List[Dict]:
+        """Skill-gap report: recurring-failure clusters ranked by frequency,
+        recency, and unresolved-ness. The store's answer to "which skill/doc/
+        permanent fix should we write next?" — every failure card is a place
+        an agent got stuck; recurrence is the signal. Zero-LLM."""
+        from rainman.core.gaps import gap_report
+        self._ensure_loaded()
+        return gap_report(self._visible(), time.time(),
+                          limit=limit, min_cluster=min_cluster)
+
     def consolidate(self, forget: bool = True, dry_run: bool = False) -> Dict:
         """The offline "sleep" pass (zero-LLM). Two human-memory operations:
 

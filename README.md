@@ -63,6 +63,9 @@ rainman context
 
 # Check installation health
 rainman doctor
+
+# Where do my agents keep getting stuck? (your skill/doc backlog, auto-collected)
+rainman gaps
 ```
 
 ## Editor Integration

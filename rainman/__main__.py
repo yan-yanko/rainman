@@ -93,6 +93,11 @@ def main():
     p_sync.add_argument("--personal", action="store_true",
                         help="Sync the personal (global-layer) remote instead of the team one")
 
+    # gaps
+    p_gaps = sub.add_parser("gaps", help="Skill-gap report: what your agents keep getting stuck on")
+    p_gaps.add_argument("-n", "--limit", type=int, default=10, help="Max clusters to show (default 10)")
+    p_gaps.add_argument("--all", action="store_true", help="Include one-off failures, not just recurring ones")
+
     # policy
     sub.add_parser("policy", help="Show the effective policy and which layer set each value")
 
@@ -153,7 +158,7 @@ def main():
         cmd_links, cmd_export, cmd_context, cmd_ingest,
         cmd_setup, cmd_doctor, cmd_review, cmd_migrate,
         cmd_remote, cmd_sync, cmd_mcp_config, cmd_learn_commit, cmd_consolidate,
-        cmd_reconsolidate, cmd_working, cmd_policy, cmd_audit,
+        cmd_reconsolidate, cmd_working, cmd_policy, cmd_audit, cmd_gaps,
     )
 
     if args.command == "init":
@@ -187,6 +192,8 @@ def main():
                    token=args.token, personal=args.personal)
     elif args.command == "sync":
         cmd_sync(personal=args.personal)
+    elif args.command == "gaps":
+        cmd_gaps(limit=args.limit, include_singles=args.all)
     elif args.command == "policy":
         cmd_policy()
     elif args.command == "audit":
