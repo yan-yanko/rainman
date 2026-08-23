@@ -12,7 +12,7 @@ Built by extracting the scoring engine from CogniTrait (Pygmalion's personality-
 
 **Repo:** `C:\Users\yanko\My Apps\rainman`
 **Stack:** Python 3.10+ (stdlib only)
-**Tests:** `pip install -e . && pytest tests/ -m unit` — 341 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
+**Tests:** `pip install -e . && pytest tests/ -m unit` — 350 tests, stdlib only. (The team sync server and its tests live in the separate `rainman-server` repo.)
 
 ## Architecture
 
@@ -33,6 +33,7 @@ rainman/
     redact.py       Secret redaction + path denylist (+ org-policy extras) for auto-learn safety
     salience.py     Write-side curation: score how worth-remembering an auto-learned memory is (gate hook spam)
     consolidate.py  Offline "sleep" pass: episodic->semantic generalization (extract common elements across recurring events) + functional forgetting (Ebbinghaus adaptive decay of un-recalled orphan noise). Zero-LLM. Wired via engine.consolidate() / `rainman consolidate`.
+    gaps.py         Skill-gap report: cluster recurring failures, rank by frequency/recency/unresolved -> "which skill or permanent fix to write next" (`rainman gaps`)
     working.py      Working-memory buffer: capacity-limited (7±2) TTL'd LRU of the memories in focus this session (Miller/Baddeley). Persisted to .rainman/working.json; recall() touches it; engine.working_set() / `rainman working`.
     audit.py        Append-only JSONL audit log (opt-in, batched) — store/recall/forget/retention
     config.py       Policy control plane (org.enforce > project > user > org.defaults > builtin)
@@ -69,7 +70,7 @@ It holds the server (RBAC, OIDC SSO, audit, encryption-at-rest, admin console)
 plus its SOC2-readiness doc and the client<->server integration tests. This
 repo (the client) stays MIT + stdlib-only. `rainman/sync/client.py` is the
 client half that talks to it via `rainman remote` / `rainman sync`.
-tests/                  (341 tests total, all marked `unit`)
+tests/                  (350 tests total, all marked `unit`)
   test_scoring.py     scoring components + weighted sum
   test_engine.py      add / recall / context / links / forget
   test_sentiment.py   sentiment classifier
@@ -90,6 +91,7 @@ tests/                  (341 tests total, all marked `unit`)
   test_assoc_graph.py  real linking (stemmed/windowless/typed edges) + 2-hop spreading activation (M3/M4)
   test_semantic.py  optional semantic lane seam: RRF fusion + stub-provider synonym recall (M7)
   test_eval.py      IR metrics + gold-set harness + memory-lift on/off plumbing
+  test_gaps.py      skill-gap report: failure clustering, ranking, known-fix surfacing
   test_sqlite_backend.py  SQLite backend parity, selection, migrate (Ph2a)
   test_sync_client.py client-side sync: config/token-safety, push/pull apply (mocked HTTP)
   test_retrieval_quality.py  IR gate: recall@5/MRR on paraphrased queries + relevance floor
@@ -182,6 +184,7 @@ rainman audit verify [--path]         # Verify the tamper-evident audit hash cha
 rainman consolidate [--dry-run] [--no-forget]  # "Sleep" pass: promote recurring events -> generalizations + forget stale noise
 rainman reconsolidate <id> "new info" [--replace]  # Update a memory in place (labile-window integration; keeps revision history)
 rainman working                       # Show the working-memory set (what's in focus this session)
+rainman gaps [-n 10] [--all]          # Skill-gap report: what your agents keep getting stuck on, ranked
 ```
 
 ## Team sync (client side)
@@ -241,7 +244,7 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full model and [`SECURITY.md`](
 
 - **Client (`rainman/`) has zero external dependencies.** stdlib only. No pip install needed beyond setuptools. This is non-negotiable — it's the core security/marketing claim.
 - **Zero LLM calls.** Storing, scoring, and ranking are keyword matching + math — zero tokens. Recalled memories are injected as normal context, costing input tokens only when surfaced to the model.
-- **Never break the existing tests (341 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
+- **Never break the existing tests (350 and counting).** Run `pip install -e . && pytest tests/ -m unit` before any change. CI also runs `ruff check rainman/`.
 - **This repo (the client) stays stdlib-only + MIT forever.** Never add a dependency to `rainman/`. The team sync server lives in the separate `rainman-server` repo (BSL 1.1) where deps are allowed (`cryptography`, `PyJWT[crypto]`) — that split is what keeps the client's zero-dep claim intact. The ONLY exception is the **opt-in `rainman[semantic]` extra** (M7): the core stays zero-dep and runs pure-lexical; installing the extra adds a small CPU-only local embedding model (`model2vec`/potion-base-8M) that activates the dense lane via the `semantic_search` policy. It is never imported at core import time and `pip install rainman` pulls in nothing.
 - **Atomic writes.** Store uses tmp + os.replace to prevent corruption on crash.
 - **File locking.** Multi-process writes (hooks + MCP server) use lockfile to prevent clobbering.

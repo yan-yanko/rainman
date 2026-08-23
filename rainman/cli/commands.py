@@ -386,6 +386,37 @@ def cmd_working() -> None:
         print(f"  {i}. [{m.category}/{m.memory_type}] {m.content[:100]}")
 
 
+def cmd_gaps(limit: int = 10, include_singles: bool = False) -> None:
+    """Skill-gap report: what your agents keep getting stuck on, ranked."""
+    engine = _get_engine()
+    rows = engine.gaps(limit=limit, min_cluster=1 if include_singles else 2)
+    if not rows:
+        print("No recurring struggles found — either the store is young, or "
+              "things only break once here. \U0001F389")
+        print("(Include one-off failures with `rainman gaps --all`.)")
+        return
+
+    print("Where your agents keep getting stuck "
+          "(recurring failures, most urgent first):\n")
+    for i, r in enumerate(rows, 1):
+        days = r["days_since_last"]
+        when = "today" if days < 1 else f"{int(days)}d ago"
+        status = ("STILL OPEN — no known fix"
+                  if r["unresolved"] else "has a known fix")
+        print(f"{i}. {r['occurrences']}× · last seen {when} · {status}")
+        print(f"   {r['problem'][:110]}")
+        if r["files"]:
+            print(f"   files: {', '.join(r['files'])}")
+        if r["known_fix"]:
+            print(f"   known fix: {r['known_fix'][:100]}")
+            print("   → the agents keep re-hitting this; recall covers the "
+                  "recovery — a skill or permanent fix would prevent the hit")
+        else:
+            print("   → unsolved and recurring — top candidate for a skill, "
+                  "a doc, or a permanent fix")
+        print()
+
+
 def cmd_reconsolidate(memory_id: str, addition: str, replace: bool = False) -> None:
     """Integrate new information into an existing memory in place (reconsolidation)."""
     engine = _get_engine()
