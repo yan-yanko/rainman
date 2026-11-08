@@ -350,3 +350,92 @@ the hook capturing** (the pairing mechanism is unit-tested in
 understates a human *re-reading* a small notes file — though no amount of
 re-reading recovers a note that was never written, which is the variable under
 test. Captured artifact: `lazy_notes_run.json`.
+
+## Companion: `writer_ablation_bench.py`: who should WRITE memory?
+
+Every bench above holds the **write** side fixed and varies retrieval. This one
+holds retrieval fixed (`build_memory_context`, the same `recall()` for every
+arm) and varies only **who decides what gets stored**.
+
+Why now: Anthropic's *components of agent memory* research (Nov 2026) reports
+that for strong models, letting the model judge salience beat fixed rules set in
+advance ("record only failures" cut Opus 5's memory gain by 0.234). Rainman's
+auto-learn hooks are a fixed rule set. So: do they add anything over the model
+calling `remember` itself?
+
+Eight Claude-Code-style sessions in a fictional repo. Six carry a durable fact a
+later task needs, each placed where it naturally lives (a test failure, a
+docstring, the assistant's prose, the user's own message). Two carry only
+volatile state (branch, coverage %). Arms:
+
+- **hooks**: every tool event replayed through the real pipeline
+  (`integration.core.learn_from_tool`, then `capture_learnings`). Zero LLM.
+- **model**: one fresh Claude subagent per session sees only the transcript and
+  Rainman's own `remember` tool contract. It is told what memory is *for*, not
+  what to store, and never sees the probes. Its answers are recorded verbatim in
+  `writer_model_memories.json`.
+- **both**: hooks + model in one store.
+
+Result (captured 2026-11-08, `python eval/local_demo/writer_ablation_bench.py`):
+
+```
+probe fact lives in                             none   hooks   model    both
+p1    failure->fix (test run)                      -  stored     HIT     HIT
+p2    failure->fix (test run)                      -  stored     HIT     HIT
+p3    convention read in code                      -       -     HIT     HIT
+p4    decision in prose (trigger phrase)           -     HIT     HIT     HIT
+p5    decision in prose (no trigger phrase)        -       -     HIT     HIT
+p6    user instruction                             -       -     HIT     HIT
+
+covered (written at all)                         0/6     3/6     6/6     6/6
+surfaced (injected top-k)                        0/6     1/6     6/6     6/6
+store size (memories)                              0      12       7      19
+volatile/stale memories                            0       0       0       0
+injected-line precision                            -    0.05     0.3    0.27
+```
+
+Buried under unrelated memories (`--scale`):
+
+```
+ noise    hooks    model     both
+     0      1/6      6/6      6/6
+    50      1/6      6/6      5/6
+   200      2/6      6/6      5/6
+   500      2/6      6/6      5/6
+```
+
+What it says:
+
+1. **The hooks record *that* something broke and got fixed, not *how*.** The
+   failure card holds the stack trace. The paired solution card says
+   `Fix: pytest tests/test_invoices.py now passes`. The actual fix
+   (`next_invoice_seq`) sits in an Edit note that ranks below both. This
+   qualifies `lazy_notes_bench.py`, which fed `resolve_failure()` a fix text
+   directly: the real pipeline never writes one.
+2. **The first line of a Read is rarely the knowledge.** The millicents
+   convention is in line 3 of a docstring. The hooks store line 1 or drop it.
+3. **Only a phrase on the trigger list survives SessionEnd mining** ("decided
+   to" in p4). The same decision phrased differently (p5) and the user's own
+   instruction (p6) are never written.
+4. **Adding the hooks to the model's memories made it slightly worse** at
+   scale (6/6 → 5/6): the content-poor failure cards carry high importance
+   and push the quarry convention out of the top 5. One probe, so a direction,
+   not a measurement.
+5. **The model writer stored no volatile state** (it returned `[]` for the
+   branch/coverage and the login walkthrough). The hooks stored nothing
+   volatile here either, but did store `Command succeeded: pytest` four times.
+
+### Honest caveats (this companion)
+
+- **Small and synthetic.** 8 sessions, 6 probes, one repo, one model run per
+  session, no variance. Fact placement decides the result, which is why it is
+  reported per fact type. Read the table, not the total.
+- **The model writes with hindsight**, at the end of the session, like the
+  SessionEnd hook. In-flow writing competes with the task for attention, and a
+  real agent may skip `remember` when busy. That gap is not measured here.
+- **Writing costs the model tokens; the hooks cost nothing.** This bench prices
+  memory quality only.
+- **The model writer is a strong frontier model.** The article found weaker
+  models write and read memory much worse. The hooks' value may be larger there
+  and on non-Claude hosts.
+- **Grading is "did the fact reach the context"**, not task success.
